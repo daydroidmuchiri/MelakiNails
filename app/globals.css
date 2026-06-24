@@ -1,27 +1,89 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --color-cream: #f7f3ee;
+    --color-amber: #e8b84b;
+    --color-charcoal: #1a1a2e;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-cream text-charcoal font-sans antialiased;
+    font-feature-settings: "kern" 1, "liga" 1;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /* ─── Buttons ─────────────────────────────── */
+  .btn-primary {
+    @apply w-full flex items-center justify-center gap-2 bg-amber text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-amber-dark transition-all duration-200 text-sm;
+  }
+
+  .btn-outline {
+    @apply flex items-center justify-center gap-2 border border-amber text-amber font-semibold py-2.5 px-4 rounded-lg hover:bg-amber hover:text-white transition-all duration-200 text-sm;
+  }
+
+  .btn-ghost {
+    @apply flex items-center justify-center gap-2 text-muted font-medium py-2 px-3 rounded-lg hover:bg-cream-200 transition-all duration-200 text-sm;
+  }
+
+  /* ─── Cards ───────────────────────────────── */
+  .product-card {
+    @apply bg-white rounded-xl shadow-card hover:shadow-card-hover transition-all duration-300 overflow-hidden;
+  }
+
+  /* ─── Sidebar ─────────────────────────────── */
+  .sidebar-item {
+    @apply flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm text-charcoal-400 hover:bg-cream-200 hover:text-charcoal transition-colors duration-150 cursor-pointer;
+  }
+
+  .sidebar-item.active {
+    @apply bg-amber-50 text-amber-dark font-semibold border-l-2 border-amber;
+  }
+
+  /* ─── Inputs ──────────────────────────────── */
+  .input-base {
+    @apply w-full border border-border rounded-lg px-3 py-2.5 text-sm text-charcoal placeholder-muted focus:outline-none focus:ring-2 focus:ring-amber focus:border-amber transition-colors duration-150 bg-white;
+  }
+
+  /* ─── Section Headers ─────────────────────── */
+  .section-title {
+    @apply text-2xl font-display font-bold text-charcoal;
+  }
+
+  /* ─── Badge ───────────────────────────────── */
+  .badge-sale {
+    @apply bg-badge-sale text-white text-2xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wide;
+  }
+
+  .badge-new {
+    @apply bg-badge-new text-white text-2xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wide;
+  }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
 }

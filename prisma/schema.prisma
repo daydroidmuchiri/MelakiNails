@@ -9,50 +9,60 @@ datasource db {
   provider = "postgresql"
 }
 
+
 model Category {
-  id        String    @id @default(cuid())
-  name      String    @unique
-  slug      String    @unique
-  products  Product[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  name         String    @unique
+  slug         String    @unique
+  image        String?
+  displayOrder Int       @default(0)
+  active       Boolean   @default(true)
+  products     Product[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@map("categories")
 }
 
 model Product {
-  id            String      @id @default(cuid())
-  name          String
-  slug          String      @unique
-  description   String?
-  price         Float
-  originalPrice Float?
-  images        String[]
-  categoryId    String
-  category      Category    @relation(fields: [categoryId], references: [id])
-  badge         String?
-  rating        Float       @default(4.5)
-  reviewCount   Int         @default(0)
-  stock         Int         @default(100)
-  featured      Boolean     @default(false)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  orderItems    OrderItem[]
+  id                String      @id @default(cuid())
+  name              String
+  slug              String      @unique
+  description       String?
+  price             Float
+  originalPrice     Float?
+  images            String[]
+  sku               String?     @unique
+  stock             Int         @default(100)
+  lowStockThreshold Int         @default(5)
+  active            Boolean     @default(true)
+  featured          Boolean     @default(false)
+  categoryId        String
+  category          Category    @relation(fields: [categoryId], references: [id])
+  badge             String?
+  rating            Float       @default(4.5)
+  reviewCount       Int         @default(0)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  orderItems        OrderItem[]
 
   @@map("products")
 }
 
 model Order {
-  id           String      @id @default(cuid())
-  customerName String
-  email        String?
-  phone        String
-  address      String
-  total        Float
-  status       OrderStatus @default(PENDING)
-  items        OrderItem[]
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id            String               @id @default(cuid())
+  customerName  String
+  email         String?
+  phone         String
+  address       String
+  total         Float
+  notes         String?
+  status        OrderStatus          @default(PENDING)
+  statusHistory OrderStatusHistory[]
+  payments      Payment[]
+  items         OrderItem[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
 
   @@map("orders")
 }
@@ -69,10 +79,91 @@ model OrderItem {
   @@map("order_items")
 }
 
+model OrderStatusHistory {
+  id        String      @id @default(cuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  notes     String?
+  createdAt DateTime    @default(now())
+
+  @@map("order_status_history")
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  orderId        String
+  order          Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount         Float
+  paymentMethod  String
+  transactionRef String?       @unique
+  status         PaymentStatus @default(PENDING)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@map("payments")
+}
+
+model Promotion {
+  id                 String   @id @default(cuid())
+  title              String
+  description        String?
+  discountPercentage Float
+  active             Boolean  @default(true)
+  startDate          DateTime
+  endDate            DateTime
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("promotions")
+}
+
+model StoreSettings {
+  id        String   @id @default("singleton")
+  storeName String   @default("MELAKI")
+  phone     String   @default("+254 700 000 000")
+  phone2    String?
+  email     String   @default("info@melaki.co.ke")
+  address   String   @default("Nairobi, Kenya")
+  facebook  String?
+  instagram String?
+  twitter   String?
+  youtube   String?
+  whatsapp  String?
+  hours     String   @default("Mon - Sat: 8:00 AM - 6:00 PM")
+  updatedAt DateTime @updatedAt
+
+  @@map("store_settings")
+}
+
 enum OrderStatus {
   PENDING
   PROCESSING
+  PAID
   SHIPPED
   DELIVERED
   CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String?
+  role         AdminRole @default(ADMIN)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("admin_users")
+}
+
+enum AdminRole {
+  ADMIN
+  SUPER_ADMIN
 }

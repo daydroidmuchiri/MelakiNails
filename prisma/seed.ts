@@ -1,4 +1,7 @@
+// dotenv must be first — lib/prisma reads DATABASE_URL when the module loads
+import "dotenv/config";
 import { prisma } from "../lib/prisma";
+import bcrypt from "bcryptjs";
 
 async function main() {
   console.log("🌱 Seeding MELAKI database...");
@@ -254,12 +257,158 @@ async function main() {
     },
   ];
 
+  let skuIndex = 100;
   for (const product of products) {
-    await prisma.product.create({ data: product });
-    console.log(`  ✅ Created: ${product.name}`);
+    const sku = `MEL-${skuIndex++}`;
+    const lowStockThreshold = product.stock <= 5 ? 2 : 5;
+    await prisma.product.create({
+      data: {
+        ...product,
+        sku,
+        lowStockThreshold,
+        active: true,
+      },
+    });
+    console.log(`  ✅ Created: ${product.name} (${sku})`);
+  }
+
+  // Create / update default StoreSettings record
+  await prisma.storeSettings.upsert({
+    where: { id: "singleton" },
+    update: {},
+    create: {
+      id: "singleton",
+      storeName: "MELAKI",
+      phone: "+254 700 000 000",
+      phone2: "+254 711 111 111",
+      email: "info@melaki.co.ke",
+      address: "Chaka Place, Kilimani, Nairobi",
+      facebook: "https://facebook.com/melakinails",
+      instagram: "https://instagram.com/melakinails",
+      twitter: "https://twitter.com/melakinails",
+      youtube: "https://youtube.com/@melakinails",
+      whatsapp: "+254700000000",
+      hours: "Mon - Sat: 8:00 AM - 6:00 PM",
+    },
+  });
+  console.log("  ✅ Upserted default StoreSettings");
+
+
+  // Create sample promotions
+  await prisma.promotion.createMany({
+    data: [
+      {
+        title: "Grand Opening Discount",
+        description: "Get 15% off all salon furniture during our launch week!",
+        discountPercentage: 15,
+        active: true,
+        startDate: new Date(),
+        endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+      {
+        title: "End of Month Clearance",
+        description: "Clearance sale on selected professional nail tools.",
+        discountPercentage: 25,
+        active: false,
+        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+        endDate: new Date(Date.now() - 23 * 24 * 60 * 60 * 1000),
+      },
+    ],
+  });
+  console.log("  ✅ Created sample Promotions");
+
+  // Get some created products to associate with orders
+  const dbProducts = await prisma.product.findMany();
+  if (dbProducts.length >= 2) {
+    // Create a PENDING order
+    await prisma.order.create({
+      data: {
+        customerName: "Jane Doe",
+        email: "jane@example.com",
+        phone: "+254 712 345 678",
+        address: "Kilimani, Nairobi",
+        total: dbProducts[0].price * 2,
+        status: "PENDING",
+        items: {
+          create: [
+            {
+              productId: dbProducts[0].id,
+              quantity: 2,
+              price: dbProducts[0].price,
+            },
+          ],
+        },
+        statusHistory: {
+          create: [
+            { status: "PENDING", notes: "Order submitted by customer" },
+          ],
+        },
+      },
+    });
+
+    // Create a PAID / PROCESSING order
+    await prisma.order.create({
+      data: {
+        customerName: "John Smith",
+        email: "john@example.com",
+        phone: "+254 722 999 888",
+        address: "Westlands, Nairobi",
+        total: dbProducts[1].price,
+        status: "PROCESSING",
+        items: {
+          create: [
+            {
+              productId: dbProducts[1].id,
+              quantity: 1,
+              price: dbProducts[1].price,
+            },
+          ],
+        },
+        statusHistory: {
+          create: [
+            { status: "PENDING", notes: "Order submitted by customer" },
+            { status: "PROCESSING", notes: "Order approved, processing initiated" },
+          ],
+        },
+        payments: {
+          create: [
+            {
+              amount: dbProducts[1].price,
+              paymentMethod: "M-PESA",
+              transactionRef: "QWX123456789",
+              status: "SUCCESS",
+            },
+          ],
+        },
+      },
+    });
+    console.log("  ✅ Created sample Orders, Payments, and Status History");
   }
 
   console.log(`\n✨ Seeded ${products.length} products across ${categories.length} categories`);
+
+  // ── Seed default administrator account ──────────────────────────────
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (!adminEmail || !adminPassword) {
+    console.warn(
+      "\n⚠️  ADMIN_EMAIL or ADMIN_PASSWORD not set in .env — skipping admin user seed."
+    );
+  } else {
+    const passwordHash = await bcrypt.hash(adminPassword, 12);
+    await prisma.adminUser.upsert({
+      where: { email: adminEmail },
+      update: { passwordHash },
+      create: {
+        email: adminEmail,
+        passwordHash,
+        name: "Administrator",
+        role: "ADMIN",
+      },
+    });
+    console.log(`  ✅ Admin user seeded: ${adminEmail}`);
+  }
 }
 
 main()

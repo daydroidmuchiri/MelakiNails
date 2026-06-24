@@ -9,8 +9,10 @@
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
+    "db:seed": "npx tsx prisma/seed.ts",
+    "db:seed:admin": "npx tsx prisma/seed-admin.ts",
     "db:studio": "prisma studio"
+
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
@@ -18,11 +20,14 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@types/bcryptjs": "^2.4.6",
     "@types/pg": "^8.20.0",
+    "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "lucide-react": "^1.21.0",
     "next": "14.2.35",
+    "next-auth": "^4.24.14",
     "pg": "^8.22.0",
     "prisma": "^7.8.0",
     "react": "^18",

@@ -6,7 +6,13 @@ import { useCartStore } from "@/store/cartStore";
 import { SITE_CONFIG } from "@/lib/constants";
 import { useState } from "react";
 
-export function Header() {
+interface HeaderProps {
+  settings?: {
+    storeName: string;
+  } | null;
+}
+
+export function Header({ settings }: HeaderProps) {
   const totalItems = useCartStore((state) => state.totalItems);
   const [mobileOpen, setMobileOpen] = useState(false);
   const itemCount = totalItems();
@@ -20,7 +26,7 @@ export function Header() {
             href="/products"
             className="font-display text-2xl font-bold text-charcoal tracking-tight hover:text-amber transition-colors"
           >
-            {SITE_CONFIG.name}
+            {settings?.storeName || SITE_CONFIG.name}
           </Link>
 
           {/* Desktop Nav */}

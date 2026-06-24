@@ -44,7 +44,23 @@ function Youtube(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
-export function Footer() {
+interface FooterProps {
+  settings?: {
+    storeName: string;
+    phone: string;
+    phone2: string | null;
+    email: string;
+    address: string;
+    facebook: string | null;
+    instagram: string | null;
+    twitter: string | null;
+    youtube: string | null;
+    whatsapp: string | null;
+    hours: string;
+  } | null;
+}
+
+export function Footer({ settings }: FooterProps) {
   return (
     <footer className="bg-charcoal text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-8">
@@ -55,7 +71,7 @@ export function Footer() {
               href="/products"
               className="font-display text-3xl font-bold text-white hover:text-amber transition-colors"
             >
-              {SITE_CONFIG.name}
+              {settings?.storeName || SITE_CONFIG.name}
             </Link>
             <p className="mt-4 text-sm text-charcoal-100 leading-relaxed">
               {SITE_CONFIG.description}
@@ -63,22 +79,22 @@ export function Footer() {
             <div className="flex items-center gap-3 mt-6">
               {[
                 {
-                  href: SITE_CONFIG.social.facebook,
+                  href: settings?.facebook || SITE_CONFIG.social.facebook,
                   icon: Facebook,
                   label: "Facebook",
                 },
                 {
-                  href: SITE_CONFIG.social.instagram,
+                  href: settings?.instagram || SITE_CONFIG.social.instagram,
                   icon: Instagram,
                   label: "Instagram",
                 },
                 {
-                  href: SITE_CONFIG.social.twitter,
+                  href: settings?.twitter || SITE_CONFIG.social.twitter,
                   icon: Twitter,
                   label: "Twitter",
                 },
                 {
-                  href: SITE_CONFIG.social.youtube,
+                  href: settings?.youtube || SITE_CONFIG.social.youtube,
                   icon: Youtube,
                   label: "YouTube",
                 },
@@ -141,47 +157,49 @@ export function Footer() {
               <li className="flex items-start gap-3">
                 <MapPin className="w-4 h-4 text-amber mt-0.5 shrink-0" />
                 <span className="text-sm text-charcoal-100">
-                  {SITE_CONFIG.address}
+                  {settings?.address || SITE_CONFIG.address}
                 </span>
               </li>
               <li className="flex items-center gap-3">
                 <Phone className="w-4 h-4 text-amber shrink-0" />
                 <a
-                  href={`tel:${SITE_CONFIG.phone}`}
+                  href={`tel:${settings?.phone || SITE_CONFIG.phone}`}
                   className="text-sm text-charcoal-100 hover:text-amber transition-colors"
                 >
-                  {SITE_CONFIG.phone}
+                  {settings?.phone || SITE_CONFIG.phone}
                 </a>
               </li>
-              <li className="flex items-center gap-3">
-                <Phone className="w-4 h-4 text-amber shrink-0" />
-                <a
-                  href={`tel:${SITE_CONFIG.phone2}`}
-                  className="text-sm text-charcoal-100 hover:text-amber transition-colors"
-                >
-                  {SITE_CONFIG.phone2}
-                </a>
-              </li>
+              {(settings?.phone2 || SITE_CONFIG.phone2) && (
+                <li className="flex items-center gap-3">
+                  <Phone className="w-4 h-4 text-amber shrink-0" />
+                  <a
+                    href={`tel:${settings?.phone2 || SITE_CONFIG.phone2}`}
+                    className="text-sm text-charcoal-100 hover:text-amber transition-colors"
+                  >
+                    {settings?.phone2 || SITE_CONFIG.phone2}
+                  </a>
+                </li>
+              )}
               <li className="flex items-center gap-3">
                 <Mail className="w-4 h-4 text-amber shrink-0" />
                 <a
-                  href={`mailto:${SITE_CONFIG.email}`}
+                  href={`mailto:${settings?.email || SITE_CONFIG.email}`}
                   className="text-sm text-charcoal-100 hover:text-amber transition-colors"
                 >
-                  {SITE_CONFIG.email}
+                  {settings?.email || SITE_CONFIG.email}
                 </a>
               </li>
               <li className="flex items-center gap-3">
                 <Clock className="w-4 h-4 text-amber shrink-0" />
                 <span className="text-sm text-charcoal-100">
-                  {SITE_CONFIG.hours}
+                  {settings?.hours || SITE_CONFIG.hours}
                 </span>
               </li>
             </ul>
 
             {/* WhatsApp CTA */}
             <a
-              href={`https://wa.me/${SITE_CONFIG.whatsapp}`}
+              href={`https://wa.me/${settings?.whatsapp || SITE_CONFIG.whatsapp}`}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-5 inline-flex items-center gap-2 bg-[#25D366] hover:bg-[#20BD5A] text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors duration-200"

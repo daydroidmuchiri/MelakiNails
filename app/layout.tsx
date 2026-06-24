@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { prisma } from "@/lib/prisma";
+import { Providers } from "./Providers";
 
 export const metadata: Metadata = {
   title: {
@@ -27,17 +29,23 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const settings = await prisma.storeSettings.findUnique({
+    where: { id: "singleton" },
+  });
+
   return (
     <html lang="en">
       <body className="min-h-screen flex flex-col bg-cream">
-        <Header />
-        <main className="flex-1">{children}</main>
-        <Footer />
+        <Providers>
+          <Header settings={settings} />
+          <main className="flex-1">{children}</main>
+          <Footer settings={settings} />
+        </Providers>
       </body>
     </html>
   );

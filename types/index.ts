@@ -4,8 +4,11 @@ export interface Category {
   id: string;
   name: string;
   slug: string;
-  createdAt: string;
-  updatedAt: string;
+  image: string | null;
+  displayOrder: number;
+  active: boolean;
+  createdAt: string | Date;
+  updatedAt: string | Date;
   _count?: {
     products: number;
   };
@@ -19,15 +22,18 @@ export interface Product {
   price: number;
   originalPrice: number | null;
   images: string[];
+  sku: string | null;
+  stock: number;
+  lowStockThreshold: number;
+  active: boolean;
+  featured: boolean;
   categoryId: string;
   category: Category;
   badge: string | null;
   rating: number;
   reviewCount: number;
-  stock: number;
-  featured: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
 }
 
 // ─── Cart Types ───────────────────────────────────────────────────────────────

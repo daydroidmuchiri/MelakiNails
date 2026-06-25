@@ -37,5 +37,18 @@ export default async function AdminOrderDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  return <OrderDetailView order={order} />;
+  const serializedOrder = {
+    ...order,
+    total: Number(order.total),
+    items: order.items.map((item) => ({
+      ...item,
+      price: Number(item.price),
+    })),
+    payments: order.payments.map((p) => ({
+      ...p,
+      amount: Number(p.amount),
+    })),
+  };
+
+  return <OrderDetailView order={serializedOrder} />;
 }

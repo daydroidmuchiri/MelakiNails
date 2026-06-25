@@ -10,6 +10,24 @@ export const metadata: Metadata = {
   title: "Shop Professional Nail Supplies",
   description:
     "Browse our full range of salon furniture, manicure tables, pedicure chairs, nail tools and beauty equipment.",
+  alternates: {
+    canonical: "/products",
+  },
+  openGraph: {
+    title: "Shop Professional Nail Supplies | MELAKI",
+    description:
+      "Browse MELAKI salon furniture, manicure tables, pedicure chairs, nail tools and beauty equipment.",
+    type: "website",
+    url: "/products",
+    images: [
+      {
+        url: "/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "MELAKI product catalog",
+      },
+    ],
+  },
 };
 
 interface PageProps {
@@ -74,6 +92,29 @@ export default async function ProductsPage({ searchParams }: PageProps) {
 
   return (
     <div className="bg-cream min-h-screen">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              {
+                "@type": "ListItem",
+                position: 1,
+                name: "Home",
+                item: "https://melaki.co.ke",
+              },
+              {
+                "@type": "ListItem",
+                position: 2,
+                name: "Products",
+                item: "https://melaki.co.ke/products",
+              },
+            ],
+          }),
+        }}
+      />
       {/* Page header */}
       <div className="text-center py-8 px-4 border-b border-border bg-white">
         <h1 className="font-display text-3xl md:text-4xl font-bold text-charcoal">

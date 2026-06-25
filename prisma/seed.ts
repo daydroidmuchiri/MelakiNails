@@ -327,7 +327,7 @@ async function main() {
         email: "jane@example.com",
         phone: "+254 712 345 678",
         address: "Kilimani, Nairobi",
-        total: dbProducts[0].price * 2,
+        total: Number(dbProducts[0].price) * 2,
         status: "PENDING",
         items: {
           create: [

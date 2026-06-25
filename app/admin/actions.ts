@@ -6,6 +6,8 @@ import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import type { OrderStatus } from "@prisma/client";
 import { slugify } from "@/lib/utils";
+import { notifyOrderStatusUpdated, notifyPaymentSuccessful } from "@/lib/email/senders";
+import { requireAdminSession } from "@/lib/adminAuth";
 
 // ─── Image Upload Helper ─────────────────────────────────────────────────────
 async function uploadImage(file: File | string | null): Promise<string | null> {
@@ -37,6 +39,7 @@ async function uploadImage(file: File | string | null): Promise<string | null> {
 
 // ─── Product Actions ─────────────────────────────────────────────────────────
 export async function createProduct(formData: FormData) {
+  await requireAdminSession();
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;
   const price = parseFloat(formData.get("price") as string);
@@ -49,6 +52,10 @@ export async function createProduct(formData: FormData) {
   const featured = formData.get("featured") === "true";
   const categoryId = formData.get("categoryId") as string;
   const badge = formData.get("badge") as string || null;
+
+  if (!name.trim() || !categoryId || !Number.isFinite(price) || price < 0) {
+    throw new Error("Invalid product details");
+  }
 
   const imageFiles = formData.getAll("images") as (File | string)[];
   const imageUrls: string[] = [];
@@ -77,8 +84,8 @@ export async function createProduct(formData: FormData) {
       price,
       originalPrice,
       sku,
-      stock,
-      lowStockThreshold,
+      stock: Math.max(0, stock),
+      lowStockThreshold: Math.max(0, lowStockThreshold),
       active,
       featured,
       categoryId,
@@ -93,6 +100,7 @@ export async function createProduct(formData: FormData) {
 }
 
 export async function updateProduct(id: string, formData: FormData) {
+  await requireAdminSession();
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;
   const price = parseFloat(formData.get("price") as string);
@@ -105,6 +113,10 @@ export async function updateProduct(id: string, formData: FormData) {
   const featured = formData.get("featured") === "true";
   const categoryId = formData.get("categoryId") as string;
   const badge = formData.get("badge") as string || null;
+
+  if (!name.trim() || !categoryId || !Number.isFinite(price) || price < 0) {
+    throw new Error("Invalid product details");
+  }
 
   // Existing images URL list
   const existingImages = formData.getAll("existingImages") as string[];
@@ -129,8 +141,8 @@ export async function updateProduct(id: string, formData: FormData) {
       price,
       originalPrice,
       sku,
-      stock,
-      lowStockThreshold,
+      stock: Math.max(0, stock),
+      lowStockThreshold: Math.max(0, lowStockThreshold),
       active,
       featured,
       categoryId,
@@ -146,6 +158,7 @@ export async function updateProduct(id: string, formData: FormData) {
 }
 
 export async function deleteProduct(id: string) {
+  await requireAdminSession();
   await prisma.product.delete({
     where: { id },
   });
@@ -156,6 +169,7 @@ export async function deleteProduct(id: string) {
 
 // ─── Category Actions ────────────────────────────────────────────────────────
 export async function createCategory(formData: FormData) {
+  await requireAdminSession();
   const name = formData.get("name") as string;
   const displayOrder = parseInt(formData.get("displayOrder") as string) || 0;
   const active = formData.get("active") === "true";
@@ -163,6 +177,10 @@ export async function createCategory(formData: FormData) {
 
   const imageUrl = await uploadImage(imageFile);
   const slug = slugify(name);
+
+  if (!name.trim()) {
+    throw new Error("Category name is required");
+  }
 
   await prisma.category.create({
     data: {
@@ -179,6 +197,7 @@ export async function createCategory(formData: FormData) {
 }
 
 export async function updateCategory(id: string, formData: FormData) {
+  await requireAdminSession();
   const name = formData.get("name") as string;
   const displayOrder = parseInt(formData.get("displayOrder") as string) || 0;
   const active = formData.get("active") === "true";
@@ -192,6 +211,10 @@ export async function updateCategory(id: string, formData: FormData) {
   }
 
   const slug = slugify(name);
+
+  if (!name.trim()) {
+    throw new Error("Category name is required");
+  }
 
   await prisma.category.update({
     where: { id },
@@ -209,6 +232,7 @@ export async function updateCategory(id: string, formData: FormData) {
 }
 
 export async function deleteCategory(id: string) {
+  await requireAdminSession();
   await prisma.category.delete({
     where: { id },
   });
@@ -218,7 +242,8 @@ export async function deleteCategory(id: string) {
 
 // ─── Order & Payment Actions ─────────────────────────────────────────────────
 export async function updateOrderStatus(orderId: string, status: OrderStatus, notes?: string) {
-  await prisma.order.update({
+  await requireAdminSession();
+  const order = await prisma.order.update({
     where: { id: orderId },
     data: {
       status,
@@ -229,6 +254,22 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus, no
         },
       },
     },
+    include: {
+      items: {
+        include: {
+          product: {
+            select: {
+              name: true,
+              sku: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  await notifyOrderStatusUpdated({ order, status, notes }).catch((error) => {
+    console.error("Order status notification failed:", error);
   });
 
   revalidatePath("/admin/orders");
@@ -241,7 +282,12 @@ export async function addOrderPayment(
   paymentMethod: string,
   transactionRef?: string
 ) {
-  await prisma.$transaction([
+  await requireAdminSession();
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Invalid payment amount");
+  }
+
+  const [, order] = await prisma.$transaction([
     prisma.payment.create({
       data: {
         orderId,
@@ -262,8 +308,29 @@ export async function addOrderPayment(
           },
         },
       },
+      include: {
+        items: {
+          include: {
+            product: {
+              select: {
+                name: true,
+                sku: true,
+              },
+            },
+          },
+        },
+      },
     }),
   ]);
+
+  await notifyPaymentSuccessful({
+    order,
+    amount,
+    receipt: transactionRef,
+    paidAt: new Date(),
+  }).catch((error) => {
+    console.error("Manual payment notification failed:", error);
+  });
 
   revalidatePath("/admin/orders");
   revalidatePath(`/admin/orders/${orderId}`);
@@ -271,11 +338,16 @@ export async function addOrderPayment(
 
 // ─── Inventory Actions ───────────────────────────────────────────────────────
 export async function adjustInventory(productId: string, stock: number, lowStockThreshold: number) {
+  await requireAdminSession();
+  if (!Number.isFinite(stock) || !Number.isFinite(lowStockThreshold)) {
+    throw new Error("Invalid inventory values");
+  }
+
   await prisma.product.update({
     where: { id: productId },
     data: {
-      stock,
-      lowStockThreshold,
+      stock: Math.max(0, Math.floor(stock)),
+      lowStockThreshold: Math.max(0, Math.floor(lowStockThreshold)),
     },
   });
 
@@ -286,12 +358,17 @@ export async function adjustInventory(productId: string, stock: number, lowStock
 
 // ─── Promotion Actions ───────────────────────────────────────────────────────
 export async function createPromotion(formData: FormData) {
+  await requireAdminSession();
   const title = formData.get("title") as string;
   const description = formData.get("description") as string;
   const discountPercentage = parseFloat(formData.get("discountPercentage") as string);
   const active = formData.get("active") === "true";
   const startDate = new Date(formData.get("startDate") as string);
   const endDate = new Date(formData.get("endDate") as string);
+
+  if (!title.trim() || !Number.isFinite(discountPercentage) || discountPercentage < 0 || discountPercentage > 100 || startDate > endDate) {
+    throw new Error("Invalid promotion details");
+  }
 
   await prisma.promotion.create({
     data: {
@@ -309,12 +386,17 @@ export async function createPromotion(formData: FormData) {
 }
 
 export async function updatePromotion(id: string, formData: FormData) {
+  await requireAdminSession();
   const title = formData.get("title") as string;
   const description = formData.get("description") as string;
   const discountPercentage = parseFloat(formData.get("discountPercentage") as string);
   const active = formData.get("active") === "true";
   const startDate = new Date(formData.get("startDate") as string);
   const endDate = new Date(formData.get("endDate") as string);
+
+  if (!title.trim() || !Number.isFinite(discountPercentage) || discountPercentage < 0 || discountPercentage > 100 || startDate > endDate) {
+    throw new Error("Invalid promotion details");
+  }
 
   await prisma.promotion.update({
     where: { id },
@@ -333,6 +415,7 @@ export async function updatePromotion(id: string, formData: FormData) {
 }
 
 export async function deletePromotion(id: string) {
+  await requireAdminSession();
   await prisma.promotion.delete({
     where: { id },
   });
@@ -341,6 +424,7 @@ export async function deletePromotion(id: string) {
 
 // ─── Settings Actions ────────────────────────────────────────────────────────
 export async function saveStoreSettings(formData: FormData) {
+  await requireAdminSession();
   const storeName = formData.get("storeName") as string;
   const phone = formData.get("phone") as string;
   const phone2 = formData.get("phone2") as string || null;
@@ -352,6 +436,10 @@ export async function saveStoreSettings(formData: FormData) {
   const youtube = formData.get("youtube") as string || null;
   const whatsapp = formData.get("whatsapp") as string || null;
   const hours = formData.get("hours") as string;
+
+  if (!storeName.trim() || !email.includes("@") || !phone.trim() || !address.trim()) {
+    throw new Error("Invalid store settings");
+  }
 
   await prisma.storeSettings.upsert({
     where: { id: "singleton" },
@@ -385,4 +473,35 @@ export async function saveStoreSettings(formData: FormData) {
   });
 
   revalidatePath("/", "layout");
+}
+
+export async function saveEmailSettings(formData: FormData) {
+  await requireAdminSession();
+  const emailSender = formData.get("emailSender") as string;
+  const emailNotification = formData.get("emailNotification") as string;
+  const emailCustomerEnabled = formData.get("emailCustomerEnabled") === "true";
+  const emailAdminEnabled = formData.get("emailAdminEnabled") === "true";
+
+  if (!emailSender.includes("@") || !emailNotification.includes("@")) {
+    throw new Error("Invalid email settings");
+  }
+
+  await prisma.storeSettings.upsert({
+    where: { id: "singleton" },
+    update: {
+      emailSender,
+      emailNotification,
+      emailCustomerEnabled,
+      emailAdminEnabled,
+    },
+    create: {
+      id: "singleton",
+      emailSender,
+      emailNotification,
+      emailCustomerEnabled,
+      emailAdminEnabled,
+    },
+  });
+
+  revalidatePath("/admin/settings/email");
 }

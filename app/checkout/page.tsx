@@ -1,18 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useCartStore } from "@/store/cartStore";
 import { formatPrice } from "@/lib/utils";
 import { CheckCircle2, Loader2, ArrowLeft, ShoppingBag } from "lucide-react";
 import type { OrderFormData } from "@/types";
 
-type CheckoutState = "form" | "loading" | "success";
+type CheckoutState = "form" | "loading" | "waiting-payment" | "success";
 
 export default function CheckoutPage() {
   const { items, totalPrice, totalItems, clearCart } = useCartStore();
   const [checkoutState, setCheckoutState] = useState<CheckoutState>("form");
   const [orderId, setOrderId] = useState<string>("");
+  const [checkoutRequestId, setCheckoutRequestId] = useState<string>("");
   const [errors, setErrors] = useState<Partial<OrderFormData>>({});
   const [formData, setFormData] = useState<OrderFormData>({
     customerName: "",
@@ -20,6 +21,53 @@ export default function CheckoutPage() {
     phone: "",
     address: "",
   });
+
+  useEffect(() => {
+    if (checkoutState !== "waiting-payment" || !checkoutRequestId) return;
+
+
+
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(`/api/payments/status?checkoutRequestId=${checkoutRequestId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.status === "SUCCESS") {
+          clearInterval(intervalId);
+          clearTimeout(timeoutId);
+          clearCart();
+          setCheckoutState("success");
+        } else if (
+          data.status === "FAILED" ||
+          data.status === "CANCELLED" ||
+          data.status === "TIMEOUT"
+        ) {
+          clearInterval(intervalId);
+          clearTimeout(timeoutId);
+          setCheckoutState("form");
+          alert(`Payment failed or cancelled. Reason: ${data.resultDesc || data.status}`);
+        }
+      } catch (err) {
+        console.error("Error checking payment status:", err);
+      }
+    };
+
+    const intervalId = setInterval(checkStatus, 3000);
+
+    const timeoutId = setTimeout(() => {
+      clearInterval(intervalId);
+      setCheckoutState("form");
+      alert("Payment confirmation timed out. Please verify on your phone or try again.");
+    }, 60000);
+
+    checkStatus();
+
+    return () => {
+      clearInterval(intervalId);
+      clearTimeout(timeoutId);
+    };
+  }, [checkoutState, checkoutRequestId, clearCart]);
 
   const subtotal = totalPrice();
   const delivery = subtotal >= 5000 ? 0 : 300;
@@ -56,6 +104,7 @@ export default function CheckoutPage() {
     setCheckoutState("loading");
 
     try {
+      // 1. Create Order record
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -70,14 +119,32 @@ export default function CheckoutPage() {
         }),
       });
 
-      if (!response.ok) throw new Error("Order failed");
+      if (!response.ok) throw new Error("Order creation failed. Please try again.");
       const order = await response.json();
       setOrderId(order.id);
-      clearCart();
-      setCheckoutState("success");
-    } catch {
+
+      // 2. Initiate M-Pesa STK Push
+      const stkResponse = await fetch("/api/payments/stk-push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: order.id,
+          phoneNumber: formData.phone,
+        }),
+      });
+
+      if (!stkResponse.ok) {
+        const errData = await stkResponse.json();
+        throw new Error(errData.error || "M-Pesa payment request failed");
+      }
+
+      const stkData = await stkResponse.json();
+      setCheckoutRequestId(stkData.checkoutRequestId);
+      setCheckoutState("waiting-payment");
+    } catch (error) {
+      const err = error as Error;
       setCheckoutState("form");
-      alert("Failed to place order. Please try again.");
+      alert(err.message || "Failed to process payment. Please try again.");
     }
   };
 
@@ -96,6 +163,41 @@ export default function CheckoutPage() {
           >
             Shop Now
           </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Waiting payment screen
+  if (checkoutState === "waiting-payment") {
+    return (
+      <div className="bg-cream min-h-screen flex items-center justify-center px-4">
+        <div className="bg-white rounded-2xl shadow-card p-10 max-w-md w-full text-center">
+          <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Loader2 className="w-10 h-10 text-amber animate-spin" />
+          </div>
+          <h1 className="text-2xl font-display font-bold text-charcoal mb-2">
+            M-Pesa STK Push Sent
+          </h1>
+          <p className="text-sm text-muted mb-6">
+            Please check your phone (<strong>{formData.phone}</strong>) for the M-Pesa prompt.
+            Enter your M-Pesa PIN to authorize the payment of <strong>{formatPrice(total)}</strong>.
+          </p>
+          <div className="bg-cream rounded-xl px-5 py-4 mb-6 text-left space-y-2">
+            <p className="text-xs text-muted leading-relaxed">
+              1. A pop-up prompt has been sent to your phone.
+            </p>
+            <p className="text-xs text-muted leading-relaxed">
+              2. Enter your M-Pesa PIN and press OK.
+            </p>
+            <p className="text-xs text-muted leading-relaxed">
+              3. Once you complete the payment, this page will update automatically.
+            </p>
+          </div>
+          <div className="text-xs text-muted flex items-center justify-center gap-1.5">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber" />
+            <span>Waiting for payment confirmation...</span>
+          </div>
         </div>
       </div>
     );

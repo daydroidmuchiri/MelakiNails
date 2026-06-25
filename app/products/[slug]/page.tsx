@@ -16,18 +16,29 @@ interface PageProps {
 }
 
 async function getProduct(slug: string) {
-  return prisma.product.findUnique({
+  const product = await prisma.product.findUnique({
     where: { slug },
     include: { category: true },
   });
+  if (!product) return null;
+  return {
+    ...product,
+    price: Number(product.price),
+    originalPrice: product.originalPrice ? Number(product.originalPrice) : null,
+  };
 }
 
 async function getRelated(categoryId: string, excludeId: string) {
-  return prisma.product.findMany({
+  const related = await prisma.product.findMany({
     where: { categoryId, id: { not: excludeId } },
     include: { category: true },
     take: 3,
   });
+  return related.map((p) => ({
+    ...p,
+    price: Number(p.price),
+    originalPrice: p.originalPrice ? Number(p.originalPrice) : null,
+  }));
 }
 
 export async function generateMetadata({
@@ -35,9 +46,27 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const product = await getProduct(params.slug);
   if (!product) return { title: "Product Not Found" };
+  const image = product.images[0] ?? "/og-image.jpg";
   return {
     title: product.name,
-    description: product.description ?? undefined,
+    description:
+      product.description ?? "Shop this MELAKI professional nail and salon product.",
+    alternates: {
+      canonical: `/products/${product.slug}`,
+    },
+    openGraph: {
+      title: `${product.name} | MELAKI`,
+      description:
+        product.description ?? "Shop this MELAKI professional nail and salon product.",
+      type: "website",
+      url: `/products/${product.slug}`,
+      images: [
+        {
+          url: image,
+          alt: product.name,
+        },
+      ],
+    },
   };
 }
 
@@ -56,6 +85,59 @@ export default async function ProductDetailPage({ params }: PageProps) {
 
   return (
     <div className="bg-cream min-h-screen">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify([
+            {
+              "@context": "https://schema.org",
+              "@type": "Product",
+              name: product.name,
+              description: product.description ?? product.name,
+              image: product.images,
+              sku: product.sku ?? product.id,
+              brand: {
+                "@type": "Brand",
+                name: "MELAKI",
+              },
+              offers: {
+                "@type": "Offer",
+                priceCurrency: "KES",
+                price: product.price,
+                availability:
+                  product.stock > 0
+                    ? "https://schema.org/InStock"
+                    : "https://schema.org/OutOfStock",
+                url: `https://melaki.co.ke/products/${product.slug}`,
+              },
+            },
+            {
+              "@context": "https://schema.org",
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                {
+                  "@type": "ListItem",
+                  position: 1,
+                  name: "Products",
+                  item: "https://melaki.co.ke/products",
+                },
+                {
+                  "@type": "ListItem",
+                  position: 2,
+                  name: product.category.name,
+                  item: `https://melaki.co.ke/products?category=${product.category.slug}`,
+                },
+                {
+                  "@type": "ListItem",
+                  position: 3,
+                  name: product.name,
+                  item: `https://melaki.co.ke/products/${product.slug}`,
+                },
+              ],
+            },
+          ]),
+        }}
+      />
       {/* Breadcrumb */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <nav className="flex items-center gap-1.5 text-xs text-muted">

@@ -27,6 +27,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  if (token.role !== "ADMIN" && token.role !== "SUPER_ADMIN") {
+    const loginUrl = new URL("/admin/login", request.url);
+    return NextResponse.redirect(loginUrl);
+  }
+
   return NextResponse.next();
 }
 

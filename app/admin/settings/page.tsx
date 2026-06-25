@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { SettingsForm } from "@/components/admin/SettingsForm";
+import Link from "next/link";
+import { Mail } from "lucide-react";
 
 export const revalidate = 0; // Fresh reads
 
@@ -18,6 +20,14 @@ export default async function AdminSettingsPage() {
           Modify store emails, phone numbers, location addresses, social profiles, and operational hours.
         </p>
       </div>
+
+      <Link
+        href="/admin/settings/email"
+        className="inline-flex items-center gap-2 bg-charcoal hover:bg-charcoal-600 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors"
+      >
+        <Mail className="w-4 h-4" />
+        Email Settings
+      </Link>
 
       <SettingsForm settings={settings} />
     </div>

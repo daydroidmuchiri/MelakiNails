@@ -62,7 +62,7 @@ export default async function AdminDashboard() {
     }),
   ]);
 
-  const totalRevenue = completedPayments._sum.amount || 0;
+  const totalRevenue = completedPayments._sum.amount ? Number(completedPayments._sum.amount) : 0;
   const lowStockCount = lowStockProducts.length;
 
   return (
@@ -195,7 +195,7 @@ export default async function AdminDashboard() {
                           </span>
                         </td>
                         <td className="px-5 py-3.5 font-semibold text-charcoal">
-                          {formatPrice(order.total)}
+                          {formatPrice(Number(order.total))}
                         </td>
                         <td className="px-5 py-3.5 text-muted text-right text-xs">
                           {new Date(order.createdAt).toLocaleDateString("en-KE", {

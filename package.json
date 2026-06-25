@@ -12,7 +12,6 @@
     "db:seed": "npx tsx prisma/seed.ts",
     "db:seed:admin": "npx tsx prisma/seed-admin.ts",
     "db:studio": "prisma studio"
-
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
@@ -20,6 +19,7 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@sentry/nextjs": "^10.60.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/pg": "^8.20.0",
     "bcryptjs": "^3.0.3",

@@ -53,6 +53,9 @@ interface OrderDetailViewProps {
       transactionRef: string | null;
       status: string;
       createdAt: Date;
+      phoneNumber?: string | null;
+      mpesaReceipt?: string | null;
+      paidAt?: Date | null;
     }>;
   };
 }
@@ -330,7 +333,7 @@ export function OrderDetailView({ order }: OrderDetailViewProps) {
             ) : (
               <div className="space-y-2.5">
                 {order.payments.map((p) => (
-                  <div key={p.id} className="bg-cream-50 border border-border p-3 rounded-lg text-xs space-y-1">
+                  <div key={p.id} className="bg-cream-50 border border-border p-3 rounded-lg text-xs space-y-1.5">
                     <div className="flex justify-between font-bold text-charcoal">
                       <span>{p.paymentMethod}</span>
                       <span>{formatPrice(p.amount)}</span>
@@ -338,9 +341,22 @@ export function OrderDetailView({ order }: OrderDetailViewProps) {
                     {p.transactionRef && (
                       <p className="text-3xs text-muted">Ref: <span className="font-semibold uppercase text-charcoal-400">{p.transactionRef}</span></p>
                     )}
+                    {p.phoneNumber && (
+                      <p className="text-3xs text-muted">Phone: <span className="font-semibold text-charcoal-400">{p.phoneNumber}</span></p>
+                    )}
+                    {p.mpesaReceipt && (
+                      <p className="text-3xs text-muted">M-Pesa Receipt: <span className="font-semibold uppercase text-charcoal-400">{p.mpesaReceipt}</span></p>
+                    )}
+                    {p.paidAt && (
+                      <p className="text-3xs text-muted">Paid At: <span className="font-semibold text-charcoal-400">{new Date(p.paidAt).toLocaleString("en-KE")}</span></p>
+                    )}
                     <div className="flex justify-between items-center text-3xs text-muted pt-1">
                       <span>{new Date(p.createdAt).toLocaleDateString()}</span>
-                      <span className="text-green-700 font-bold uppercase tracking-wider">{p.status}</span>
+                      <span className={`font-bold uppercase tracking-wider ${
+                        p.status === "SUCCESS" ? "text-green-700" :
+                        p.status === "PENDING" || p.status === "PROCESSING" ? "text-amber-700" :
+                        "text-red-700"
+                      }`}>{p.status}</span>
                     </div>
                   </div>
                 ))}

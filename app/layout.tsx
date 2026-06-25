@@ -26,6 +26,19 @@ export const metadata: Metadata = {
     title: "MELAKI — Professional Nail Supplies & Salon Equipment",
     description: "Kenya's premier source for professional nail & salon supplies.",
     type: "website",
+    url: "https://melaki.co.ke",
+    siteName: "MELAKI",
+    images: [
+      {
+        url: "/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "MELAKI professional nail supplies and salon equipment",
+      },
+    ],
+  },
+  alternates: {
+    canonical: "/",
   },
 };
 

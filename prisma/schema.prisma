@@ -29,8 +29,8 @@ model Product {
   name              String
   slug              String      @unique
   description       String?
-  price             Float
-  originalPrice     Float?
+  price             Decimal     @db.Decimal(10, 2)
+  originalPrice     Decimal?    @db.Decimal(10, 2)
   images            String[]
   sku               String?     @unique
   stock             Int         @default(100)
@@ -46,6 +46,9 @@ model Product {
   updatedAt         DateTime    @updatedAt
   orderItems        OrderItem[]
 
+  @@index([categoryId])
+  @@index([active])
+  @@index([featured])
   @@map("products")
 }
 
@@ -55,7 +58,7 @@ model Order {
   email         String?
   phone         String
   address       String
-  total         Float
+  total         Decimal              @db.Decimal(10, 2)
   notes         String?
   status        OrderStatus          @default(PENDING)
   statusHistory OrderStatusHistory[]
@@ -64,6 +67,9 @@ model Order {
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
 
+  @@index([email])
+  @@index([status])
+  @@index([createdAt])
   @@map("orders")
 }
 
@@ -72,7 +78,7 @@ model OrderItem {
   orderId   String
   productId String
   quantity  Int
-  price     Float
+  price     Decimal  @db.Decimal(10, 2)
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product   Product @relation(fields: [productId], references: [id])
 
@@ -94,13 +100,22 @@ model Payment {
   id             String        @id @default(cuid())
   orderId        String
   order          Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  amount         Float
-  paymentMethod  String
-  transactionRef String?       @unique
-  status         PaymentStatus @default(PENDING)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  amount            Decimal       @db.Decimal(10, 2)
+  paymentMethod     String
+  transactionRef    String?       @unique
+  status            PaymentStatus @default(PENDING)
+  checkoutRequestId String?       @unique
+  merchantRequestId String?
+  mpesaReceipt      String?
+  phoneNumber       String?
+  resultCode        Int?
+  resultDesc        String?
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
+  @@index([status])
+  @@index([createdAt])
   @@map("payments")
 }
 
@@ -115,25 +130,48 @@ model Promotion {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  @@index([active])
+  @@index([startDate])
+  @@index([endDate])
   @@map("promotions")
 }
 
 model StoreSettings {
-  id        String   @id @default("singleton")
-  storeName String   @default("MELAKI")
-  phone     String   @default("+254 700 000 000")
-  phone2    String?
-  email     String   @default("info@melaki.co.ke")
-  address   String   @default("Nairobi, Kenya")
-  facebook  String?
-  instagram String?
-  twitter   String?
-  youtube   String?
-  whatsapp  String?
-  hours     String   @default("Mon - Sat: 8:00 AM - 6:00 PM")
-  updatedAt DateTime @updatedAt
+  id                   String   @id @default("singleton")
+  storeName            String   @default("MELAKI")
+  phone                String   @default("+254 700 000 000")
+  phone2               String?
+  email                String   @default("info@melaki.co.ke")
+  address              String   @default("Nairobi, Kenya")
+  facebook             String?
+  instagram            String?
+  twitter              String?
+  youtube              String?
+  whatsapp             String?
+  hours                String   @default("Mon - Sat: 8:00 AM - 6:00 PM")
+  emailSender          String   @default("orders@melaki.co.ke")
+  emailNotification    String   @default("admin@melaki.co.ke")
+  emailCustomerEnabled Boolean  @default(true)
+  emailAdminEnabled    Boolean  @default(true)
+  updatedAt            DateTime @updatedAt
 
   @@map("store_settings")
+}
+
+model EmailLog {
+  id         String   @id @default(cuid())
+  recipient  String
+  subject    String
+  type       String
+  status     String
+  error      String?
+  createdAt  DateTime @default(now())
+
+  @@index([recipient])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@map("email_logs")
 }
 
 enum OrderStatus {
@@ -147,8 +185,11 @@ enum OrderStatus {
 
 enum PaymentStatus {
   PENDING
+  PROCESSING
   SUCCESS
   FAILED
+  CANCELLED
+  TIMEOUT
 }
 
 model AdminUser {

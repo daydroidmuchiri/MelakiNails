@@ -15,6 +15,10 @@ export default async function AdminLayout({
     redirect("/admin/login");
   }
 
+  if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") {
+    redirect("/admin/login");
+  }
+
   return (
     <div className="min-h-screen flex bg-cream">
       <AdminSidebar
@@ -26,4 +30,3 @@ export default async function AdminLayout({
     </div>
   );
 }
-

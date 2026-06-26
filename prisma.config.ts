@@ -1,10 +1,15 @@
 import "dotenv/config";
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
   datasource: {
-    url: env("DATABASE_URL"),
+    // Use process.env directly with a fallback so `prisma generate` succeeds
+    // in environments where DATABASE_URL isn't set at build time (e.g. Vercel CI).
+    // The strict env() helper throws PrismaConfigEnvError when the variable is
+    // absent, which breaks generation even though generate never connects to the DB.
+    // The real runtime connection is made in lib/prisma.ts via the PrismaClient adapter.
+    url: process.env.DATABASE_URL ?? "",
   },
   migrations: {
     seed: "npx tsx prisma/seed.ts",

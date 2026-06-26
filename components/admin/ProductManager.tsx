@@ -540,7 +540,7 @@ export function ProductManager({ products, categories }: ProductManagerProps) {
                         className="w-16 h-16 rounded border border-border relative overflow-hidden bg-cream-50"
                       >
                         <Image
-                          src={imgUrl}
+                          src={imgUrl || "/placeholder.jpg"}
                           alt="product thumbnail"
                           fill
                           className="object-cover"

@@ -17,7 +17,7 @@ export function ProductCard({ product }: ProductCardProps) {
       <div className="relative aspect-[4/3] overflow-hidden bg-cream-200">
         <Link href={`/products/${product.slug}`}>
           <Image
-            src={product.images[0] ?? "/placeholder.jpg"}
+            src={product.images[0] || "/placeholder.jpg"}
             alt={product.name}
             fill
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"

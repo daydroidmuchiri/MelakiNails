@@ -46,7 +46,7 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const product = await getProduct(params.slug);
   if (!product) return { title: "Product Not Found" };
-  const image = product.images[0] ?? "/og-image.jpg";
+  const image = product.images[0] || "/og-image.jpg";
   return {
     title: product.name,
     description:
@@ -163,7 +163,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
           <div className="space-y-3">
             <div className="relative aspect-square rounded-xl overflow-hidden bg-cream-200">
               <Image
-                src={product.images[0] ?? "/placeholder.jpg"}
+                src={product.images[0] || "/placeholder.jpg"}
                 alt={product.name}
                 fill
                 className="object-cover"
@@ -185,7 +185,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
                     className="relative w-16 h-16 rounded-lg overflow-hidden border-2 border-amber"
                   >
                     <Image
-                      src={img}
+                      src={img || "/placeholder.jpg"}
                       alt={`${product.name} view ${i + 1}`}
                       fill
                       className="object-cover"

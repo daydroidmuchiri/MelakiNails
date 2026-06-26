@@ -275,10 +275,10 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
                   Cover Image
                 </label>
 
-                {existingImage && !imageFile && (
+                {existingImage && existingImage.trim() !== "" && !imageFile && (
                   <div className="w-16 h-16 rounded border border-border relative overflow-hidden bg-cream-50 mb-2">
                     <Image
-                      src={existingImage}
+                      src={existingImage || "/placeholder.jpg"}
                       alt="thumbnail"
                       fill
                       className="object-cover"

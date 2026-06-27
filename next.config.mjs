@@ -26,7 +26,7 @@ const nextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://images.unsplash.com https://res.cloudinary.com https://placehold.co; font-src 'self' data:; connect-src 'self' https://api.resend.com https://sandbox.safaricom.co.ke https://api.safaricom.co.ke; frame-ancestors 'none'; base-uri 'self'; form-action 'self';",
+              "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://api.resend.com https://sandbox.safaricom.co.ke https://api.safaricom.co.ke; frame-src https://www.google.com https://www.google.com/maps https://maps.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';",
           },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },

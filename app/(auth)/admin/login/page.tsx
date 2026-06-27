@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import LoginForm from "./LoginForm";
 import { Store } from "lucide-react";
 
+const ADMIN_ROLES = new Set(["ADMIN", "SUPER_ADMIN"]);
+
 export const metadata = {
   title: "Admin Login — MELAKI",
   description: "Sign in to the MELAKI administration panel.",
@@ -13,7 +15,7 @@ export default async function AdminLoginPage() {
   const session = await getServerSession(authOptions);
 
   // Already authenticated → go straight to admin dashboard
-  if (session) {
+  if (session?.user?.role && ADMIN_ROLES.has(session.user.role)) {
     redirect("/admin");
   }
 

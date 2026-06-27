@@ -6,10 +6,37 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, LogIn, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+function getSafeCallbackUrl(callbackUrl: string | null) {
+  if (
+    !callbackUrl ||
+    !callbackUrl.startsWith("/") ||
+    callbackUrl.startsWith("//")
+  ) {
+    return "/admin";
+  }
+
+  let url: URL;
+
+  try {
+    url = new URL(callbackUrl, window.location.origin);
+  } catch {
+    return "/admin";
+  }
+
+  if (
+    (url.pathname !== "/admin" && !url.pathname.startsWith("/admin/")) ||
+    url.pathname === "/admin/login"
+  ) {
+    return "/admin";
+  }
+
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/admin";
+  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

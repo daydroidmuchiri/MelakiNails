@@ -1,18 +1,36 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useCartStore } from "@/store/cartStore";
 import { formatPrice } from "@/lib/utils";
-import { CheckCircle2, Loader2, ArrowLeft, ShoppingBag } from "lucide-react";
+import {
+  CheckCircle2,
+  Loader2,
+  ArrowLeft,
+  ShoppingBag,
+  Tag,
+  X,
+  Download,
+  FileText,
+} from "lucide-react";
 import type { OrderFormData } from "@/types";
 
 type CheckoutState = "form" | "loading" | "waiting-payment" | "success";
+
+interface CouponResult {
+  couponId: string;
+  code: string;
+  discount: number;
+  freeShipping: boolean;
+  message: string;
+}
 
 export default function CheckoutPage() {
   const { items, totalPrice, totalItems, clearCart } = useCartStore();
   const [checkoutState, setCheckoutState] = useState<CheckoutState>("form");
   const [orderId, setOrderId] = useState<string>("");
+  const [orderTrackingToken, setOrderTrackingToken] = useState<string>("");
   const [checkoutRequestId, setCheckoutRequestId] = useState<string>("");
   const [errors, setErrors] = useState<Partial<OrderFormData>>({});
   const [formData, setFormData] = useState<OrderFormData>({
@@ -22,10 +40,51 @@ export default function CheckoutPage() {
     address: "",
   });
 
+  // Coupon state
+  const [couponCode, setCouponCode] = useState("");
+  const [couponValidating, setCouponValidating] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponResult | null>(null);
+
+  // Cart sync session ID (stable per browser session)
+  const sessionIdRef = useRef<string>(
+    typeof window !== "undefined"
+      ? (sessionStorage.getItem("melaki-cart-session") ??
+          (() => {
+            const id = `cs_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+            sessionStorage.setItem("melaki-cart-session", id);
+            return id;
+          })())
+      : `cs_${Date.now()}`
+  );
+
+  // Sync cart to backend on items/email change for abandoned cart tracking
+  useEffect(() => {
+    if (items.length === 0) return;
+    const timeout = setTimeout(() => {
+      fetch("/api/cart/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: sessionIdRef.current,
+          email: formData.email || null,
+          phone: formData.phone || null,
+          items: items.map((i) => ({
+            productId: i.productId,
+            quantity: i.quantity,
+            price: i.price,
+            name: i.name,
+            slug: i.slug,
+            image: i.image,
+          })),
+        }),
+      }).catch(() => {});
+    }, 1500); // debounce 1.5s
+    return () => clearTimeout(timeout);
+  }, [items, formData.email, formData.phone]);
+
   useEffect(() => {
     if (checkoutState !== "waiting-payment" || !checkoutRequestId) return;
-
-
 
     const checkStatus = async () => {
       try {
@@ -37,6 +96,12 @@ export default function CheckoutPage() {
           clearInterval(intervalId);
           clearTimeout(timeoutId);
           clearCart();
+          // Mark cart as recovered
+          fetch("/api/cart/sync", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionId: sessionIdRef.current }),
+          }).catch(() => {});
           setCheckoutState("success");
         } else if (
           data.status === "FAILED" ||
@@ -54,7 +119,6 @@ export default function CheckoutPage() {
     };
 
     const intervalId = setInterval(checkStatus, 3000);
-
     const timeoutId = setTimeout(() => {
       clearInterval(intervalId);
       setCheckoutState("form");
@@ -70,8 +134,9 @@ export default function CheckoutPage() {
   }, [checkoutState, checkoutRequestId, clearCart]);
 
   const subtotal = totalPrice();
-  const delivery = subtotal >= 5000 ? 0 : 300;
-  const total = subtotal + delivery;
+  const discount = appliedCoupon?.discount ?? 0;
+  const delivery = appliedCoupon?.freeShipping ? 0 : subtotal - discount >= 5000 ? 0 : 300;
+  const total = subtotal - discount + delivery;
   const itemCount = totalItems();
 
   const validate = (): boolean => {
@@ -79,7 +144,7 @@ export default function CheckoutPage() {
     if (!formData.customerName.trim())
       newErrors.customerName = "Full name is required";
     if (!formData.phone.trim()) newErrors.phone = "Phone number is required";
-    else if (!/^(\+254|0)[17]\d{8}$/.test(formData.phone.replace(/\s/g, "")))
+    else if (!/^(\+254|0)\d{9}$/.test(formData.phone.replace(/\s/g, "")))
       newErrors.phone = "Enter a valid Kenyan phone number";
     if (!formData.address.trim()) newErrors.address = "Delivery address is required";
     setErrors(newErrors);
@@ -94,6 +159,42 @@ export default function CheckoutPage() {
     if (errors[name as keyof OrderFormData]) {
       setErrors((prev) => ({ ...prev, [name]: undefined }));
     }
+  };
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setCouponValidating(true);
+    setCouponError(null);
+    try {
+      const res = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: couponCode.trim(),
+          subtotal,
+          email: formData.email || null,
+          phone: formData.phone || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        setCouponError(data.message || "Invalid coupon code");
+        setAppliedCoupon(null);
+      } else {
+        setAppliedCoupon(data);
+        setCouponError(null);
+      }
+    } catch {
+      setCouponError("Unable to validate coupon. Please try again.");
+    } finally {
+      setCouponValidating(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -116,12 +217,16 @@ export default function CheckoutPage() {
             price: item.price,
           })),
           total,
+          discountTotal: discount,
+          couponCode: appliedCoupon?.code || null,
+          couponId: appliedCoupon?.couponId || null,
         }),
       });
 
       if (!response.ok) throw new Error("Order creation failed. Please try again.");
       const order = await response.json();
       setOrderId(order.id);
+      setOrderTrackingToken(order.trackingToken || "");
 
       // 2. Initiate M-Pesa STK Push
       const stkResponse = await fetch("/api/payments/stk-push", {
@@ -231,13 +336,36 @@ export default function CheckoutPage() {
               {formatPrice(total)}
             </p>
           </div>
-          <Link
-            href="/products"
-            id="continue-shopping-success"
-            className="w-full flex items-center justify-center gap-2 bg-amber hover:bg-amber-dark text-white font-semibold py-3 rounded-xl transition-colors duration-200"
-          >
-            Continue Shopping
-          </Link>
+
+          {/* Action buttons */}
+          <div className="flex flex-col gap-3">
+            {/* Invoice Download */}
+            {orderTrackingToken && (
+              <a
+                href={`/api/orders/${orderId}/invoice?token=${orderTrackingToken}`}
+                download
+                className="w-full flex items-center justify-center gap-2 border border-charcoal text-charcoal hover:bg-charcoal hover:text-white font-semibold py-3 rounded-xl transition-colors duration-200"
+              >
+                <Download className="w-4 h-4" />
+                Download Invoice PDF
+              </a>
+            )}
+            {/* Track Order */}
+            <Link
+              href={`/track-order`}
+              className="w-full flex items-center justify-center gap-2 border border-border text-muted hover:text-charcoal font-semibold py-3 rounded-xl transition-colors duration-200"
+            >
+              <FileText className="w-4 h-4" />
+              Track My Order
+            </Link>
+            <Link
+              href="/products"
+              id="continue-shopping-success"
+              className="w-full flex items-center justify-center gap-2 bg-amber hover:bg-amber-dark text-white font-semibold py-3 rounded-xl transition-colors duration-200"
+            >
+              Continue Shopping
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -402,7 +530,7 @@ export default function CheckoutPage() {
 
           {/* Order summary */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl shadow-card p-6 sticky top-24">
+            <div className="bg-white rounded-2xl shadow-card p-6 sticky top-24 space-y-4">
               <h2 className="text-base font-semibold text-charcoal mb-4">
                 Your Order ({itemCount} items)
               </h2>
@@ -422,11 +550,62 @@ export default function CheckoutPage() {
                 ))}
               </div>
 
-              <div className="border-t border-border mt-4 pt-4 space-y-2 text-sm">
+              {/* Coupon Input */}
+              <div className="border-t border-border pt-4">
+                <p className="text-xs font-semibold text-charcoal mb-2 flex items-center gap-1">
+                  <Tag className="w-3.5 h-3.5 text-amber" />
+                  Coupon Code
+                </p>
+                {appliedCoupon ? (
+                  <div className="flex items-center justify-between bg-badge-new/10 border border-badge-new/20 rounded-xl px-3 py-2">
+                    <div>
+                      <p className="text-xs font-bold text-badge-new">{appliedCoupon.code}</p>
+                      <p className="text-2xs text-muted">{appliedCoupon.message}</p>
+                    </div>
+                    <button
+                      onClick={handleRemoveCoupon}
+                      className="p-1 text-muted hover:text-badge-sale transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter coupon code"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => e.key === "Enter" && handleApplyCoupon()}
+                      className="input-base flex-1 text-xs py-2"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      disabled={couponValidating || !couponCode.trim()}
+                      className="bg-charcoal hover:bg-charcoal/80 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-colors disabled:opacity-60 whitespace-nowrap"
+                    >
+                      {couponValidating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Apply"}
+                    </button>
+                  </div>
+                )}
+                {couponError && (
+                  <p className="text-2xs text-badge-sale mt-1">{couponError}</p>
+                )}
+              </div>
+
+              {/* Totals */}
+              <div className="border-t border-border pt-4 space-y-2 text-sm">
                 <div className="flex justify-between text-charcoal-400">
                   <span>Subtotal</span>
                   <span>{formatPrice(subtotal)}</span>
                 </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-badge-sale font-medium">
+                    <span>Discount ({appliedCoupon?.code})</span>
+                    <span>-{formatPrice(discount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-charcoal-400">
                   <span>Delivery</span>
                   <span className={delivery === 0 ? "text-badge-new font-semibold" : ""}>

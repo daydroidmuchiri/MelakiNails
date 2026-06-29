@@ -8,8 +8,9 @@ import { StarRating } from "@/components/ui/StarRating";
 import { PriceDisplay } from "@/components/ui/PriceDisplay";
 import { AddToCartButton } from "@/components/ui/AddToCartButton";
 import { ProductGrid } from "@/components/products/ProductGrid";
-import { ChevronRight, Package, Truck, Shield, RefreshCw } from "lucide-react";
+import { ChevronRight, Package, Truck, Shield, RefreshCw, Star, ThumbsUp } from "lucide-react";
 import type { Product } from "@/types";
+import ReviewForm from "./ReviewForm";
 
 interface PageProps {
   params: { slug: string };
@@ -75,6 +76,21 @@ export default async function ProductDetailPage({ params }: PageProps) {
   if (!product) notFound();
 
   const related = await getRelated(product.categoryId, product.id);
+
+  // Fetch approved reviews
+  const reviews = await prisma.review.findMany({
+    where: { productId: product.id, approved: true },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      customerName: true,
+      rating: true,
+      title: true,
+      comment: true,
+      verifiedPurchase: true,
+      createdAt: true,
+    },
+  });
 
   const guarantees = [
     { icon: Package, label: "Free Packaging" },
@@ -256,6 +272,70 @@ export default async function ProductDetailPage({ params }: PageProps) {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Customer Reviews */}
+        <div className="mt-16">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-display font-bold text-charcoal">
+              Customer Reviews
+            </h2>
+            {reviews.length > 0 && (
+              <span className="text-sm text-muted">{reviews.length} {reviews.length === 1 ? "review" : "reviews"}</span>
+            )}
+          </div>
+
+          {reviews.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-card p-8 text-center">
+              <Star className="w-12 h-12 text-muted/30 mx-auto mb-3" />
+              <p className="text-sm text-muted">No reviews yet. Be the first to review this product!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {reviews.map((review) => (
+                <div
+                  key={review.id}
+                  className="bg-white rounded-2xl shadow-card p-5 flex flex-col"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      {Array.from({ length: 5 }, (_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-4 h-4 ${
+                            i < review.rating
+                              ? "text-amber fill-amber"
+                              : "text-border"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    {review.verifiedPurchase && (
+                      <span className="text-2xs text-badge-new bg-badge-new/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <ThumbsUp className="w-3 h-3" />
+                        Verified Purchase
+                      </span>
+                    )}
+                  </div>
+                  <h4 className="text-sm font-bold text-charcoal mb-1">{review.title}</h4>
+                  <p className="text-xs text-muted leading-relaxed mb-3">{review.comment}</p>
+                  <div className="mt-auto flex items-center justify-between text-3xs text-muted">
+                    <span className="font-medium">{review.customerName}</span>
+                    <span>{new Date(review.createdAt).toLocaleDateString("en-KE", {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Review Form */}
+          <div className="mt-6">
+            <ReviewForm productId={product.id} />
           </div>
         </div>
 

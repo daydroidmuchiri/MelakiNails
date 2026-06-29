@@ -11,6 +11,9 @@ import {
   ClipboardList,
   Package,
   Tag,
+  Ticket,
+  Star,
+  BarChart3,
   Settings,
   ExternalLink,
   Menu,
@@ -52,6 +55,21 @@ const NAV_ITEMS = [
     name: "Promotions",
     href: "/admin/promotions",
     icon: Tag,
+  },
+  {
+    name: "Coupons",
+    href: "/admin/coupons",
+    icon: Ticket,
+  },
+  {
+    name: "Reviews",
+    href: "/admin/reviews",
+    icon: Star,
+  },
+  {
+    name: "Reports",
+    href: "/admin/reports",
+    icon: BarChart3,
   },
   {
     name: "Settings",

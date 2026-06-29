@@ -115,6 +115,19 @@ export async function POST(request: NextRequest) {
             },
           });
         }
+
+        // Step 5: Record CouponUsage if a coupon was applied
+        if (payment.order.couponId) {
+          await tx.couponUsage.create({
+            data: {
+              couponId: payment.order.couponId,
+              orderId: payment.orderId,
+              customerEmail: payment.order.email || null,
+              customerPhone: payment.order.phone,
+              discountAmount: payment.order.discountTotal ?? 0,
+            },
+          });
+        }
       });
 
       await notifyPaymentSuccessful({

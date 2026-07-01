@@ -126,12 +126,16 @@ export function ProductManager({ products, categories }: ProductManagerProps) {
     existingImages.forEach((img) => formData.append("existingImages", img));
 
     startTransition(async () => {
-      if (editingProduct) {
-        await updateProduct(editingProduct.id, formData);
-      } else {
-        await createProduct(formData);
+      try {
+        if (editingProduct) {
+          await updateProduct(editingProduct.id, formData);
+        } else {
+          await createProduct(formData);
+        }
+        setModalOpen(false);
+      } catch (error) {
+        alert(error instanceof Error ? error.message : "Failed to save product.");
       }
-      setModalOpen(false);
     });
   };
 
@@ -139,7 +143,11 @@ export function ProductManager({ products, categories }: ProductManagerProps) {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
     startTransition(async () => {
-      await deleteProduct(id);
+      try {
+        await deleteProduct(id);
+      } catch (error) {
+        alert(error instanceof Error ? error.message : "Failed to delete product.");
+      }
     });
   };
 
@@ -225,7 +233,7 @@ export function ProductManager({ products, categories }: ProductManagerProps) {
                       <td className="px-5 py-3.5 flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg relative overflow-hidden bg-cream-200 shrink-0">
                           <Image
-                            src={product.images[0] || "/placeholder.jpg"}
+                            src={product.images[0] || "/placeholder.png"}
                             alt={product.name}
                             fill
                             className="object-cover"
@@ -540,7 +548,7 @@ export function ProductManager({ products, categories }: ProductManagerProps) {
                         className="w-16 h-16 rounded border border-border relative overflow-hidden bg-cream-50"
                       >
                         <Image
-                          src={imgUrl || "/placeholder.jpg"}
+                          src={imgUrl || "/placeholder.png"}
                           alt="product thumbnail"
                           fill
                           className="object-cover"

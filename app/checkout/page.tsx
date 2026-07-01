@@ -15,6 +15,7 @@ import {
   FileText,
 } from "lucide-react";
 import type { OrderFormData } from "@/types";
+import { FREE_SHIPPING_THRESHOLD, STANDARD_DELIVERY_FEE } from "@/lib/constants";
 
 type CheckoutState = "form" | "loading" | "waiting-payment" | "success";
 
@@ -135,7 +136,13 @@ export default function CheckoutPage() {
 
   const subtotal = totalPrice();
   const discount = appliedCoupon?.discount ?? 0;
-  const delivery = appliedCoupon?.freeShipping ? 0 : subtotal - discount >= 5000 ? 0 : 300;
+  // Display only — the server independently computes and charges this same
+  // fee in app/api/orders/route.ts, which is the actual source of truth.
+  const delivery = appliedCoupon?.freeShipping
+    ? 0
+    : subtotal - discount >= FREE_SHIPPING_THRESHOLD
+      ? 0
+      : STANDARD_DELIVERY_FEE;
   const total = subtotal - discount + delivery;
   const itemCount = totalItems();
 

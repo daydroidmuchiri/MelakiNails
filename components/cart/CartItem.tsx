@@ -19,7 +19,7 @@ export function CartItem({ item }: CartItemProps) {
       {/* Image */}
       <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-cream-200 shrink-0">
         <Image
-          src={item.image || "/placeholder.jpg"}
+          src={item.image || "/placeholder.png"}
           alt={item.name}
           fill
           className="object-cover"

@@ -10,6 +10,9 @@ export default defineConfig({
     // absent, which breaks generation even though generate never connects to the DB.
     // The real runtime connection is made in lib/prisma.ts via the PrismaClient adapter.
     url: process.env.DATABASE_URL ?? "",
+    // Only needed for `prisma migrate dev` / `migrate diff --from-migrations`
+    // (never used by `migrate deploy`, which is what production runs).
+    shadowDatabaseUrl: process.env.SHADOW_DATABASE_URL || undefined,
   },
   migrations: {
     seed: "npx tsx prisma/seed.ts",

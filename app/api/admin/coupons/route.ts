@@ -33,6 +33,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (
+      percentageDiscount !== undefined &&
+      percentageDiscount !== null &&
+      percentageDiscount !== "" &&
+      (Number(percentageDiscount) <= 0 || Number(percentageDiscount) > 100)
+    ) {
+      return NextResponse.json(
+        { error: "Percentage discount must be between 0 and 100" },
+        { status: 400 }
+      );
+    }
+
+    if (
+      fixedDiscount !== undefined &&
+      fixedDiscount !== null &&
+      fixedDiscount !== "" &&
+      Number(fixedDiscount) <= 0
+    ) {
+      return NextResponse.json(
+        { error: "Fixed discount must be a positive amount" },
+        { status: 400 }
+      );
+    }
+
     const coupon = await prisma.coupon.create({
       data: {
         code: code.trim().toUpperCase(),

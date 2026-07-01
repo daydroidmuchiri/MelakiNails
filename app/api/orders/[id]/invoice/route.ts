@@ -174,7 +174,7 @@ export async function GET(
     currentY -= 10;
     const totalPaid = Number(order.total);
     const discount = Number(order.discountTotal);
-    const deliveryFee = totalPaid >= 5000 ? 0 : 300;
+    const deliveryFee = Number(order.deliveryFee);
 
     // Subtotal
     page.drawText("Subtotal:", { x: 390, y: currentY, size: 9, font: fontRegular, color: darkColor });

@@ -3,6 +3,9 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_MINUTES = 15;
+
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
@@ -30,14 +33,42 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email.toLowerCase().trim() },
         });
 
-        if (!admin) return null;
+        // Constant-shape response either way (no email enumeration via timing/behavior)
+        if (!admin) {
+          await bcrypt.compare(credentials.password, "$2a$10$invalidsaltinvalidsaltinvalidsal.");
+          return null;
+        }
+
+        if (admin.lockedUntil && admin.lockedUntil > new Date()) {
+          return null;
+        }
 
         const passwordValid = await bcrypt.compare(
           credentials.password,
           admin.passwordHash
         );
 
-        if (!passwordValid) return null;
+        if (!passwordValid) {
+          const attempts = admin.failedLoginAttempts + 1;
+          const lockingOut = attempts >= MAX_FAILED_ATTEMPTS;
+          await prisma.adminUser.update({
+            where: { id: admin.id },
+            data: {
+              failedLoginAttempts: lockingOut ? 0 : attempts,
+              lockedUntil: lockingOut
+                ? new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000)
+                : null,
+            },
+          });
+          return null;
+        }
+
+        if (admin.failedLoginAttempts > 0 || admin.lockedUntil) {
+          await prisma.adminUser.update({
+            where: { id: admin.id },
+            data: { failedLoginAttempts: 0, lockedUntil: null },
+          });
+        }
 
         return {
           id: admin.id,

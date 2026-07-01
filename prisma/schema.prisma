@@ -66,6 +66,7 @@ model Order {
   couponId      String?
   couponCode    String?
   discountTotal Decimal              @default(0) @db.Decimal(10, 2)
+  deliveryFee   Decimal              @default(0) @db.Decimal(10, 2)
   status        OrderStatus          @default(PENDING)
   coupon        Coupon?              @relation(fields: [couponId], references: [id], onDelete: SetNull)
   statusHistory OrderStatusHistory[]
@@ -351,13 +352,15 @@ enum CartReminderStatus {
 }
 
 model AdminUser {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String
-  name         String?
-  role         AdminRole @default(ADMIN)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  passwordHash        String
+  name                String?
+  role                AdminRole @default(ADMIN)
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   @@map("admin_users")
 }

@@ -75,12 +75,16 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
     }
 
     startTransition(async () => {
-      if (editingCategory) {
-        await updateCategory(editingCategory.id, formData);
-      } else {
-        await createCategory(formData);
+      try {
+        if (editingCategory) {
+          await updateCategory(editingCategory.id, formData);
+        } else {
+          await createCategory(formData);
+        }
+        setModalOpen(false);
+      } catch (error) {
+        alert(error instanceof Error ? error.message : "Failed to save category.");
       }
-      setModalOpen(false);
     });
   };
 
@@ -278,7 +282,7 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
                 {existingImage && existingImage.trim() !== "" && !imageFile && (
                   <div className="w-16 h-16 rounded border border-border relative overflow-hidden bg-cream-50 mb-2">
                     <Image
-                      src={existingImage || "/placeholder.jpg"}
+                      src={existingImage || "/placeholder.png"}
                       alt="thumbnail"
                       fill
                       className="object-cover"

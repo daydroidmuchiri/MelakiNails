@@ -2,16 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmailWithRetry } from "@/lib/email/client";
 import { formatPrice } from "@/lib/utils";
+import { isValidCronRequest } from "@/lib/cronAuth";
 
 // GET /api/cron/abandoned-carts — Call via Vercel Cron or external scheduler
 // Finds ACTIVE carts idle for 24+ hours where we have an email, sends reminder
 export async function GET(request: NextRequest) {
-  // Validate cron secret to prevent unauthorized triggering
-  const cronSecret = request.headers.get("x-cron-secret");
-  if (
-    process.env.CRON_SECRET &&
-    cronSecret !== process.env.CRON_SECRET
-  ) {
+  if (!isValidCronRequest(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -36,6 +36,7 @@ interface OrderDetail {
   address: string;
   total: number;
   discountTotal: number;
+  deliveryFee: number;
   couponCode: string | null;
   status: OrderStatus;
   trackingToken: string;
@@ -359,7 +360,7 @@ export default function TrackOrderPage() {
                   )}
                   <div className="flex justify-between text-muted max-w-[240px] ml-auto">
                     <span>Delivery:</span>
-                    <span>{order.total >= 5000 ? "FREE" : formatPrice(300)}</span>
+                    <span>{order.deliveryFee > 0 ? formatPrice(order.deliveryFee) : "FREE"}</span>
                   </div>
                   <div className="flex justify-between font-bold text-sm text-charcoal border-t border-border pt-2 max-w-[240px] ml-auto mt-1">
                     <span>Total Paid:</span>

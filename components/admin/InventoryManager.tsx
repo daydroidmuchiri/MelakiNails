@@ -168,7 +168,7 @@ export function InventoryManager({ products }: InventoryManagerProps) {
                       <td className="px-5 py-3.5 flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg relative overflow-hidden bg-cream-200 shrink-0 border border-border">
                           <Image
-                            src={product.images[0] || "/placeholder.jpg"}
+                            src={product.images[0] || "/placeholder.png"}
                             alt={product.name}
                             fill
                             className="object-cover"

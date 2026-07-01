@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminApi } from "@/lib/adminAuth";
+import { slugify } from "@/lib/utils";
 
 export async function GET(request: NextRequest) {
   try {
@@ -53,8 +54,28 @@ export async function POST(request: NextRequest) {
     if (unauthorized) return unauthorized;
 
     const body = await request.json();
+    const { name, description, price, originalPrice, sku, stock, lowStockThreshold, active, featured, categoryId, badge, images } = body;
+
+    if (!name || !categoryId || !Number.isFinite(price) || price < 0) {
+      return NextResponse.json({ error: "Invalid product details" }, { status: 400 });
+    }
+
     const product = await prisma.product.create({
-      data: body,
+      data: {
+        name,
+        slug: slugify(name),
+        description: description ?? null,
+        price,
+        originalPrice: originalPrice ?? null,
+        sku: sku ?? null,
+        stock: Math.max(0, Math.floor(stock ?? 0)),
+        lowStockThreshold: Math.max(0, Math.floor(lowStockThreshold ?? 5)),
+        active: Boolean(active),
+        featured: Boolean(featured),
+        categoryId,
+        badge: badge ?? null,
+        images: Array.isArray(images) ? images : [],
+      },
       include: { category: true },
     });
     return NextResponse.json(product, { status: 201 });

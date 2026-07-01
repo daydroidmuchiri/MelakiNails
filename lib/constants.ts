@@ -17,6 +17,13 @@ export const SITE_CONFIG = {
   },
 };
 
+// Flat delivery fee, waived above the free-shipping threshold or when a
+// coupon grants free shipping. Computed server-side in app/api/orders/route.ts
+// — this is the single source of truth; the checkout/track-order UIs must
+// only ever display values the server actually charged, never re-derive them.
+export const FREE_SHIPPING_THRESHOLD = 5000;
+export const STANDARD_DELIVERY_FEE = 300;
+
 export const SORT_OPTIONS = [
   { value: "featured", label: "Featured" },
   { value: "price-asc", label: "Price: Low to High" },

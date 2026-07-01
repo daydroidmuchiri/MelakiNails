@@ -61,24 +61,19 @@ export async function POST(request: NextRequest) {
       const mpesaReceipt = receiptItem?.Value ? String(receiptItem.Value) : null;
       const phone = phoneItem?.Value ? String(phoneItem.Value) : null;
 
-      // Run transactional operations to ensure atomicity
-      await prisma.$transaction(async (tx) => {
-        // Step 1: Inventory stock protection verification
-        for (const item of payment.order.items) {
-          const product = await tx.product.findUnique({
-            where: { id: item.productId },
-          });
-
-          if (!product || product.stock < item.quantity) {
-            throw new Error(
-              `Insufficient inventory for product: ${product?.name || item.productId}. Stock is ${product?.stock || 0}, requested ${item.quantity}.`
-            );
-          }
-        }
-
-        // Step 2: Update Payment Status
-        await tx.payment.update({
-          where: { id: payment.id },
+      // Run transactional operations to ensure atomicity.
+      // Stock was already decremented (reserved) when the order was created
+      // in POST /api/orders — it must not be decremented again here.
+      //
+      // Safaricom can and does redeliver the same callback. The claim step
+      // below uses updateMany with a status guard in the WHERE clause so
+      // that only one concurrent request can ever win the transition out of
+      // PENDING/PROCESSING; a second, near-simultaneous delivery sees
+      // count === 0 and backs out before creating a duplicate CouponUsage or
+      // sending a duplicate customer email.
+      const claimed = await prisma.$transaction(async (tx) => {
+        const claim = await tx.payment.updateMany({
+          where: { id: payment.id, status: { in: ["PENDING", "PROCESSING"] } },
           data: {
             status: "SUCCESS",
             mpesaReceipt,
@@ -89,6 +84,7 @@ export async function POST(request: NextRequest) {
             transactionRef: mpesaReceipt,
           },
         });
+        if (claim.count === 0) return false;
 
         // Step 3: Update Order Status to PAID and write timeline log
         await tx.order.update({
@@ -104,18 +100,6 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        // Step 4: Reduce inventory stock
-        for (const item of payment.order.items) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stock: {
-                decrement: item.quantity,
-              },
-            },
-          });
-        }
-
         // Step 5: Record CouponUsage if a coupon was applied
         if (payment.order.couponId) {
           await tx.couponUsage.create({
@@ -128,7 +112,12 @@ export async function POST(request: NextRequest) {
             },
           });
         }
+        return true;
       });
+
+      if (!claimed) {
+        return NextResponse.json({ ResponseCode: "0", ResponseDesc: "Already processed" });
+      }
 
       await notifyPaymentSuccessful({
         order: payment.order,
@@ -150,14 +139,18 @@ export async function POST(request: NextRequest) {
         finalStatus = "TIMEOUT";
       }
 
-      await prisma.payment.update({
-        where: { id: payment.id },
+      const claim = await prisma.payment.updateMany({
+        where: { id: payment.id, status: { in: ["PENDING", "PROCESSING"] } },
         data: {
           status: finalStatus,
           resultCode: ResultCode,
           resultDesc: ResultDesc,
         },
       });
+
+      if (claim.count === 0) {
+        return NextResponse.json({ ResponseCode: "0", ResponseDesc: "Already processed" });
+      }
 
       // Log failure in order status history timeline (keeps order status PENDING)
       await prisma.orderStatusHistory.create({

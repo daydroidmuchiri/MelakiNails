@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminApi } from "@/lib/adminAuth";
 
+// GET/PATCH/DELETE all read the admin auth token off the request
+// (cookies/headers) — a dynamic API. Force dynamic explicitly.
+export const dynamic = "force-dynamic";
+
 // POST — Create a new coupon
 export async function POST(request: NextRequest) {
   const unauthorized = await requireAdminApi(request);

@@ -8,6 +8,11 @@ import { FREE_SHIPPING_THRESHOLD, STANDARD_DELIVERY_FEE } from "@/lib/constants"
 import { maybeRunExpiredOrderCleanup } from "@/lib/orders/maybeRunExpiredOrderCleanup";
 import { maybeProcessAbandonedCarts } from "@/lib/abandoned-carts/maybeProcessAbandonedCarts";
 
+// GET reads the admin auth token off the request (cookies/headers) — a
+// dynamic API. Force dynamic explicitly so `next build` never attempts a
+// static trial-render of this route.
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest) {
   try {
     const body: CreateOrderPayload & {

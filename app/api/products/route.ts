@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminApi } from "@/lib/adminAuth";
 import { slugify } from "@/lib/utils";
 
+// GET uses request.url (via `new URL(request.url)`) and POST reads the
+// admin auth token off the request (cookies/headers) — dynamic APIs.
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

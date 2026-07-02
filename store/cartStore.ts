@@ -65,6 +65,15 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: "melaki-cart",
+      // Defer reading localStorage until after the first client render.
+      // Without this, the store rehydrates as part of module
+      // initialization — before React's hydration pass — so a returning
+      // visitor's non-empty cart renders differently on the client's first
+      // pass than on the server (which always starts empty, since there's
+      // no localStorage during SSR). That mismatch is exactly React errors
+      // #418/#423. Explicit rehydration is triggered post-mount in
+      // app/Providers.tsx, once hydration has already completed safely.
+      skipHydration: true,
     }
   )
 );

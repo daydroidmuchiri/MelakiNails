@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminApi } from "@/lib/adminAuth";
 
+// GET uses request.nextUrl.searchParams (and conditionally the admin auth
+// token off the request) — dynamic APIs. Force dynamic explicitly.
+export const dynamic = "force-dynamic";
+
 // POST /api/reviews — Submit a new product review (public)
 export async function POST(request: NextRequest) {
   try {

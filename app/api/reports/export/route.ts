@@ -4,6 +4,10 @@ import { requireAdminApi } from "@/lib/adminAuth";
 import ExcelJS from "exceljs";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 
+// Uses request.nextUrl.searchParams and reads the admin auth token off the
+// request (cookies/headers) — both dynamic APIs. Force dynamic explicitly.
+export const dynamic = "force-dynamic";
+
 function getDateRange(period: string, from?: string, to?: string) {
   const now = new Date();
   let start: Date;

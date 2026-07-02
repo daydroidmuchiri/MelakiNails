@@ -57,6 +57,8 @@ export const useWishlistStore = create<WishlistState>()(
     }),
     {
       name: "melaki-wishlist",
+      // See store/cartStore.ts — same SSR-hydration-mismatch fix.
+      skipHydration: true,
     }
   )
 );

@@ -70,11 +70,26 @@ async function getProducts(searchParams: PageProps["searchParams"]) {
     }
   })();
 
-  return prisma.product.findMany({
+  const products = await prisma.product.findMany({
     where,
     orderBy,
     include: { category: true },
   });
+
+  // Prisma returns price/originalPrice as Decimal instances, not plain
+  // numbers. Passing those directly into a Client Component (ProductGrid ->
+  // ProductCard -> AddToCartButton, which is "use client") crosses the
+  // Server/Client Component boundary with a non-plain-object value, which
+  // React Server Components cannot serialize correctly (confirmed live via
+  // the dev server's own "Decimal objects are not supported" warning) —
+  // silently corrupting the price stored in the cart when an item is added
+  // from this page. Convert to plain numbers here, at the source, matching
+  // the same conversion already done in app/products/[slug]/page.tsx.
+  return products.map((product) => ({
+    ...product,
+    price: Number(product.price),
+    originalPrice: product.originalPrice ? Number(product.originalPrice) : null,
+  }));
 }
 
 async function getCategories() {

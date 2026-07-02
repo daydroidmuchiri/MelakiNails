@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { processAbandonedCarts } from "@/lib/abandoned-carts/processAbandonedCarts";
 import { isValidCronRequest } from "@/lib/cronAuth";
 
+// isValidCronRequest() reads request.headers — a dynamic API. Force
+// dynamic explicitly so `next build` never attempts a static trial-render.
+export const dynamic = "force-dynamic";
+
 /**
  * OPTIONAL. Not required for the app to function.
  *

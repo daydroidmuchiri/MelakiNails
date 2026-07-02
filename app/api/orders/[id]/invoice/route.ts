@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { getToken } from "next-auth/jwt";
 
+// Uses request.nextUrl.searchParams and reads the auth token off the
+// request (cookies/headers) — both dynamic APIs. Force dynamic explicitly.
+export const dynamic = "force-dynamic";
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

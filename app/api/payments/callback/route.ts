@@ -4,6 +4,11 @@ import { verifyCallback } from "@/lib/mpesa/verifyCallback";
 import { MpesaCallbackPayload } from "@/lib/mpesa/types";
 import { notifyPaymentSuccessful } from "@/lib/email/senders";
 
+// POST-only, so `next build` never attempts a static render regardless —
+// declared explicitly anyway since this is a webhook that must never be
+// cached and reads request.headers/nextUrl.searchParams (dynamic APIs).
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest) {
   try {
     const body: MpesaCallbackPayload = await request.json();

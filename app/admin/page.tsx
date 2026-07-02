@@ -14,6 +14,7 @@ import {
 import type { OrderStatus } from "@prisma/client";
 import type { LucideIcon } from "lucide-react";
 import { maybeRunExpiredOrderCleanup } from "@/lib/orders/maybeRunExpiredOrderCleanup";
+import { maybeProcessAbandonedCarts } from "@/lib/abandoned-carts/maybeProcessAbandonedCarts";
 
 export const revalidate = 0; // Disable caching for dashboard
 
@@ -36,12 +37,17 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
 };
 
 export default async function AdminDashboard() {
-  // Opportunistic lazy cleanup — reached only by authenticated admins
-  // (middleware.ts gates all /admin/** routes). Never blocks page render.
+  // Opportunistic lazy background jobs — reached only by authenticated
+  // admins (middleware.ts gates all /admin/** routes). Never block page render.
   try {
     await maybeRunExpiredOrderCleanup();
   } catch (error) {
     console.error("[cleanup] Failed during admin dashboard load:", error);
+  }
+  try {
+    await maybeProcessAbandonedCarts();
+  } catch (error) {
+    console.error("[abandoned-carts] Failed during admin dashboard load:", error);
   }
 
   // Fetch statistics

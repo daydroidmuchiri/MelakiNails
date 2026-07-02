@@ -1,13 +1,23 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { useCartStore } from "@/store/cartStore";
 import { CartItem } from "@/components/cart/CartItem";
 import { CartSummary } from "@/components/cart/CartSummary";
 import { ShoppingBag, ArrowLeft } from "lucide-react";
+import { triggerAbandonedCartCheck } from "@/lib/abandoned-carts/triggerAbandonedCartCheck";
 
 export default function CartPage() {
   const { items, clearCart } = useCartStore();
+
+  // Opportunistic lazy trigger, fire-and-forget — never blocks rendering or
+  // surfaces an error to the customer.
+  useEffect(() => {
+    triggerAbandonedCartCheck().catch((error) => {
+      console.error("[abandoned-carts] Failed during cart page load:", error);
+    });
+  }, []);
 
   if (items.length === 0) {
     return (

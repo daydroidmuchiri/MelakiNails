@@ -11,6 +11,11 @@ import { ProductGrid } from "@/components/products/ProductGrid";
 import { ChevronRight, Package, Truck, Shield, RefreshCw, Star, ThumbsUp } from "lucide-react";
 import type { Product } from "@/types";
 import ReviewForm from "./ReviewForm";
+import { maybeProcessAbandonedCarts } from "@/lib/abandoned-carts/maybeProcessAbandonedCarts";
+
+// Force dynamic — see app/products/page.tsx for rationale (this page now
+// also touches the DB via the opportunistic cleanup trigger on every load).
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: { slug: string };
@@ -72,6 +77,13 @@ export async function generateMetadata({
 }
 
 export default async function ProductDetailPage({ params }: PageProps) {
+  // Opportunistic lazy trigger — never blocks or fails this request.
+  try {
+    await maybeProcessAbandonedCarts();
+  } catch (error) {
+    console.error("[abandoned-carts] Failed during product page load:", error);
+  }
+
   const product = await getProduct(params.slug);
   if (!product) notFound();
 

@@ -1,5 +1,4 @@
-import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { shouldRun } from "@/lib/systemThrottle";
 
 const THROTTLE_KEY = "order_cleanup_last_run_at";
 const DEFAULT_INTERVAL_MINUTES = 60;
@@ -19,54 +18,10 @@ function getIntervalMinutes(): number {
 }
 
 /**
- * Atomically checks whether enough time has passed since the last
- * opportunistic cleanup run and, if so, claims the slot by updating the
- * stored timestamp — in the same operation, so there's no window between
- * "check" and "claim" for a second concurrent request to slip through.
- *
- * Returns true only for the single caller that wins the race (via an
- * optimistic-concurrency compare-and-swap on the stored value, or a unique
- * insert if no row exists yet). Every other concurrent caller sees false and
- * must not run cleanup.
+ * Atomically checks and claims the stale-order-cleanup throttle slot — see
+ * lib/systemThrottle.ts for the underlying mechanism. Runs at most once
+ * every ORDER_CLEANUP_INTERVAL_MINUTES (default 60).
  */
 export async function shouldRunCleanup(): Promise<boolean> {
-  const intervalMinutes = getIntervalMinutes();
-  const cutoff = new Date(Date.now() - intervalMinutes * 60 * 1000);
-  const now = new Date().toISOString();
-
-  const existing = await prisma.systemSetting.findUnique({ where: { key: THROTTLE_KEY } });
-
-  if (!existing) {
-    try {
-      await prisma.systemSetting.create({ data: { key: THROTTLE_KEY, value: now } });
-      console.log(`[cleanup] Throttle claimed (first run) at ${now}`);
-      return true;
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        console.log("[cleanup] Skipped — lost the race to claim the first run");
-        return false;
-      }
-      throw error;
-    }
-  }
-
-  if (new Date(existing.value) > cutoff) {
-    console.log(
-      `[cleanup] Skipped due to throttle — last run at ${existing.value}, interval is ${intervalMinutes}m`
-    );
-    return false;
-  }
-
-  const claim = await prisma.systemSetting.updateMany({
-    where: { key: THROTTLE_KEY, value: existing.value },
-    data: { value: now },
-  });
-
-  if (claim.count === 1) {
-    console.log(`[cleanup] Throttle claimed at ${now} (previous run: ${existing.value})`);
-    return true;
-  }
-
-  console.log("[cleanup] Skipped — lost the race to a concurrent request");
-  return false;
+  return shouldRun(THROTTLE_KEY, getIntervalMinutes(), "[cleanup]");
 }

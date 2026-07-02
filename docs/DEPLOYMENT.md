@@ -2,6 +2,12 @@
 
 This is the complete, from-scratch deployment procedure. Follow it in order.
 
+**No scheduled jobs are required for normal operation.** Both background
+jobs (stale-order cleanup, abandoned-cart reminders) run opportunistically
+during real traffic — see §8. The application is fully compatible with
+Vercel's Hobby plan; external schedulers (GitHub Actions, cron-job.org,
+Vercel Pro cron) are optional scaling optimizations, never a requirement.
+
 ## 1. Prerequisites
 
 - Node.js 18+
@@ -34,8 +40,9 @@ Copy `.env.example` to `.env` and fill in every value. Reference:
 | `ADMIN_NOTIFICATION_EMAIL` | Yes | Where new-order alerts go. |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Yes | From Cloudinary dashboard → Settings → API Keys. Required for any admin product/category image upload. |
 | `ORDER_PENDING_TIMEOUT_HOURS` | No | Defaults to `4`. How old a PENDING order with no successful payment must be before cleanup cancels it. |
-| `ORDER_CLEANUP_INTERVAL_MINUTES` | No | Defaults to `60`. Minimum time between opportunistic cleanup runs — see §8. |
-| `CRON_SECRET` | No | Only needed if you also wire up the optional external-scheduler route — see §8. The app does not depend on any scheduled job by default. |
+| `ORDER_CLEANUP_INTERVAL_MINUTES` | No | Defaults to `60`. Minimum time between opportunistic stale-order cleanup runs — see §8. |
+| `ABANDONED_CART_CHECK_INTERVAL_MINUTES` | No | Defaults to `60`. Minimum time between opportunistic abandoned-cart reminder runs — see §8. |
+| `CRON_SECRET` | No | Only needed if you also wire up either optional external-scheduler route — see §8. The app does not depend on any scheduled job by default. |
 | `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` | Recommended | From your Sentry project. |
 | `SMS_ENABLED` / `SMS_PROVIDER` | No | Defaults to a mock provider; leave off until a real SMS adapter is implemented. |
 
@@ -121,40 +128,54 @@ org/project/auth-token vars for source-map upload. PII scrubbing is already
 configured (`sentry.client.config.ts` / `sentry.server.config.ts` redact
 customer name/phone/email/address before events leave the app).
 
-## 8. Stale-Order Cleanup — Lazy, No Scheduler Required
+## 8. Background Jobs — Lazy, No Scheduler Required
 
-**The app does not depend on a scheduled job to cancel stale unpaid orders.**
-This was a deliberate design change to work within Vercel's Hobby plan,
-which only allows one cron execution per day — far too infrequent for
-timely stock reservation cleanup.
+**No scheduled jobs are required for normal operation.** The app is fully
+compatible with Vercel's Hobby plan, which only allows one cron execution
+per day — far too infrequent for either job below. There is no `vercel.json`
+in this repo and none is needed. External schedulers (GitHub Actions,
+cron-job.org, Vercel Pro cron, etc.) are optional scaling optimizations, not
+requirements — see "Optional: external scheduler" below.
+
+Two background jobs both use the same lazy, self-throttling architecture:
+stale-order cleanup and abandoned-cart reminders.
 
 ### How it works
 
-Instead of a cron job, cleanup runs opportunistically during normal traffic:
+Each job is three layers, following the same pattern:
 
-- `lib/orders/cleanupExpiredOrders.ts` — the actual scan-and-cancel logic
-  (unchanged from the old cron implementation, just extracted into a
-  reusable function). Cancels PENDING orders with no successful payment
-  older than `ORDER_PENDING_TIMEOUT_HOURS`, restores their reserved stock via
-  the same `cancelOrder()` helper the admin UI uses, and returns metrics
-  (`scanned`, `cancelled`, `restoredStock`, `executionTime`).
-- `lib/orders/cleanupThrottle.ts` — `shouldRunCleanup()` atomically checks
-  and claims a throttle slot (stored in the `system_settings` table) so
-  cleanup runs at most once every `ORDER_CLEANUP_INTERVAL_MINUTES` (default
-  60), no matter how many requests come in. The check-and-claim is a single
-  compare-and-swap DB operation — safe under concurrent requests, verified
-  live with concurrent checkout calls.
-- `lib/orders/maybeRunExpiredOrderCleanup.ts` — the entry point every call
-  site actually calls. Awaits only the fast throttle check; if claimed, the
-  actual cleanup work runs without being awaited, so it never adds to the
-  response time of the request that triggered it. Never throws — every
-  failure is caught and logged, so cleanup can never break checkout, payment
-  initiation, or an admin page load.
+- **The business logic** (`lib/orders/cleanupExpiredOrders.ts`,
+  `lib/abandoned-carts/processAbandonedCarts.ts`) — unchanged from the
+  original cron implementations, just extracted into reusable functions.
+  Returns metrics (`scanned`, `cancelled`/`remindersSent`, `restoredStock`/
+  `skipped`, `executionTime`).
+- **The throttle** (`lib/systemThrottle.ts`, wrapped per-job by
+  `lib/orders/cleanupThrottle.ts` and
+  `lib/abandoned-carts/abandonedCartThrottle.ts`) — atomically checks and
+  claims a throttle slot (stored in the `system_settings` table) so each job
+  runs at most once every `ORDER_CLEANUP_INTERVAL_MINUTES` /
+  `ABANDONED_CART_CHECK_INTERVAL_MINUTES` (both default 60), no matter how
+  many requests come in. The check-and-claim is a single compare-and-swap DB
+  operation — safe under concurrent requests, verified live.
+- **The entry point** (`lib/orders/maybeRunExpiredOrderCleanup.ts`,
+  `lib/abandoned-carts/maybeProcessAbandonedCarts.ts`) — what every call site
+  actually calls. Awaits only the fast throttle check; if claimed, the actual
+  work runs without being awaited, so it never adds to the response time of
+  the request that triggered it. Never throws — every failure is caught and
+  logged, so a background job can never break checkout, payment initiation,
+  or a page load.
 
-It's called from five places: order creation (`app/api/orders/route.ts`),
-M-Pesa STK push initiation (`app/api/payments/stk-push/route.ts`), and the
-admin dashboard/orders/products pages — i.e. anywhere real traffic already
-naturally flows regularly.
+Stale-order cleanup is wired into: order creation
+(`app/api/orders/route.ts`), M-Pesa STK push initiation
+(`app/api/payments/stk-push/route.ts`), and the admin
+dashboard/orders/products pages.
+
+Abandoned-cart reminders are wired into: the home, shop, and product-detail
+pages, the cart page (a Client Component — triggered via a thin Server
+Action, `lib/abandoned-carts/triggerAbandonedCartCheck.ts`, fired
+fire-and-forget from a `useEffect`), checkout, and the admin dashboard.
+
+Together these cover effectively all real traffic, customer and admin alike.
 
 ### Performance impact
 
@@ -164,38 +185,42 @@ remote Supabase instance, the same order of magnitude as any other single DB
 query in this app (verified against a plain unrelated query for comparison).
 On a production deployment co-located in the same region as the database,
 this is a single-digit-to-low-double-digit-millisecond round trip. The
-actual cleanup scan, when it runs, is never awaited by the triggering
+actual background work, when it runs, is never awaited by the triggering
 request, so it adds effectively zero response-time overhead regardless.
 
-**Important**: set `DATABASE_POOL_SIZE` explicitly (see §2) — with the
-default of `1`, the background cleanup query can starve the foreground
-request's own database connection. This was caught live during testing.
+**Two things caught live during testing that matter for a correct deploy:**
+
+1. Set `DATABASE_POOL_SIZE` explicitly (see §2) — with the default of `1`,
+   a background job's query can starve the foreground request's own database
+   connection.
+2. Any page that now touches the database opportunistically (the pages
+   listed above) must be excluded from Next.js's build-time static
+   pre-render (`export const dynamic = "force-dynamic";`), which
+   `app/page.tsx`, `app/products/page.tsx`, and `app/products/[slug]/page.tsx`
+   already have. Without this, `next build`'s static-generation phase tries
+   to render several DB-touching pages concurrently and can exhaust a pooled
+   connection's session-mode limit (reproduced live: `next build` failed
+   with `max clients reached in session mode` until this was added). If you
+   wire a background job into a further page later, add the same export.
 
 ### Optional: external scheduler
 
-For teams that outgrow lazy cleanup (very high or very low traffic — lazy
-cleanup only runs when someone visits a wired page), `/api/cron/expire-pending-orders`
-still exists and calls the exact same `cleanupExpiredOrders()` function — no
-duplicated logic. It's authenticated and safe to wire up to any scheduler
-without changing anything else:
+For teams that outgrow lazy processing (traffic patterns where relying on
+page visits isn't reliable enough), both cron routes still exist and call
+the exact same business-logic functions used by the lazy path — no
+duplicated logic:
 
 ```bash
 curl -H "x-cron-secret: $CRON_SECRET" https://your-domain/api/cron/expire-pending-orders
+curl -H "x-cron-secret: $CRON_SECRET" https://your-domain/api/cron/abandoned-carts
 ```
 
-It accepts **either** `Authorization: Bearer <CRON_SECRET>` (what Vercel Pro
+Both accept **either** `Authorization: Bearer <CRON_SECRET>` (what Vercel Pro
 Cron sends automatically once `CRON_SECRET` is set as a project env var) or
 a custom `x-cron-secret: <CRON_SECRET>` header (for cron-job.org, GitHub
-Actions, etc). Both header styles were verified live. Note it bypasses the
-lazy-path throttle — an explicit authenticated trigger is assumed to be
-intentional, so call it at whatever cadence you actually want.
-
-`vercel.json` no longer schedules this route. It still schedules
-`/api/cron/abandoned-carts` (cart-recovery emails) — a separate feature not
-in scope here. Note that route's `0 */6 * * *` schedule (4x/day) also
-exceeds Hobby's 1x/day cron limit; if you're deploying to Hobby, either
-downgrade its schedule to once daily or apply the same lazy-cleanup pattern
-to it as a follow-up.
+Actions, etc). Both header styles were verified live. Both bypass their
+respective lazy-path throttle — an explicit authenticated trigger is assumed
+to be intentional, so call them at whatever cadence you actually want.
 
 ## 9. Deployment Order
 

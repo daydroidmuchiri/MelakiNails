@@ -5,6 +5,7 @@ import { ProductGrid } from "@/components/products/ProductGrid";
 import { ProductFilters } from "@/components/products/ProductFilters";
 import { SortBar } from "@/components/products/SortBar";
 import type { Product, Category } from "@/types";
+import { maybeProcessAbandonedCarts } from "@/lib/abandoned-carts/maybeProcessAbandonedCarts";
 
 export const metadata: Metadata = {
   title: "Shop Professional Nail Supplies",
@@ -29,6 +30,14 @@ export const metadata: Metadata = {
     ],
   },
 };
+
+// Force dynamic: already effectively dynamic via searchParams (fresh
+// stock/price data must never be statically cached), and now also touches
+// the DB via the opportunistic cleanup triggers on every load. Explicit here
+// so `next build` never attempts a build-time trial render that opens DB
+// connections — confirmed live to be able to exhaust a pooled connection's
+// session-mode limit when several such pages build concurrently.
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   searchParams: {
@@ -80,6 +89,13 @@ async function getTotalProducts() {
 }
 
 export default async function ProductsPage({ searchParams }: PageProps) {
+  // Opportunistic lazy trigger — never blocks or fails this request.
+  try {
+    await maybeProcessAbandonedCarts();
+  } catch (error) {
+    console.error("[abandoned-carts] Failed during shop page load:", error);
+  }
+
   const [products, categories, totalProducts] = await Promise.all([
     getProducts(searchParams),
     getCategories(),

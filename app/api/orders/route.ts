@@ -6,6 +6,7 @@ import { requireAdminApi } from "@/lib/adminAuth";
 import { validateCoupon } from "@/lib/coupons";
 import { FREE_SHIPPING_THRESHOLD, STANDARD_DELIVERY_FEE } from "@/lib/constants";
 import { maybeRunExpiredOrderCleanup } from "@/lib/orders/maybeRunExpiredOrderCleanup";
+import { maybeProcessAbandonedCarts } from "@/lib/abandoned-carts/maybeProcessAbandonedCarts";
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,11 +23,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Opportunistic lazy cleanup — never blocks or fails this request.
+    // Opportunistic lazy background jobs — never block or fail this request.
     try {
       await maybeRunExpiredOrderCleanup();
     } catch (error) {
       console.error("[cleanup] Failed during checkout:", error);
+    }
+    try {
+      await maybeProcessAbandonedCarts();
+    } catch (error) {
+      console.error("[abandoned-carts] Failed during checkout:", error);
     }
 
     // Validate stock availability before proceeding, and load authoritative prices.

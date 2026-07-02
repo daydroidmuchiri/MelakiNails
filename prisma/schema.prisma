@@ -369,3 +369,15 @@ enum AdminRole {
   ADMIN
   SUPER_ADMIN
 }
+
+// Small internal key-value store for system-level state that isn't customer
+// or store-facing config (e.g. the lazy-cleanup throttle timestamp in
+// lib/orders/cleanupThrottle.ts). Deliberately separate from StoreSettings,
+// which holds admin-editable storefront configuration.
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}

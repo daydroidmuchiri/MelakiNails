@@ -20,7 +20,7 @@ Copy `.env.example` to `.env` and fill in every value. Reference:
 | Variable | Required | Notes |
 |---|---|---|
 | `DATABASE_URL` | Yes | Pooled Postgres connection string. |
-| `DATABASE_POOL_SIZE` | Recommended | Defaults to `1` if unset — too low for production. Set `5`-`10`. |
+| `DATABASE_POOL_SIZE` | **Required, set explicitly** | Defaults to `1` if unset. This is not just "too low" — with a pool of 1, the opportunistic lazy-cleanup background query (see §8) directly competes with the foreground request's own database transaction for the single available connection, which can make ordinary checkout/payment requests time out. Confirmed live during testing: `DATABASE_POOL_SIZE=1` caused a real `POST /api/orders` request to fail with a transaction-pool timeout while a background cleanup run held the only connection. Set `5`-`10`. |
 | `SHADOW_DATABASE_URL` | No | Only for local `prisma migrate dev`. Never set in production. |
 | `NEXTAUTH_SECRET` | Yes | Generate with `openssl rand -base64 32`. |
 | `NEXTAUTH_URL` | Yes | Your production URL, e.g. `https://melaki.co.ke`. |
@@ -33,8 +33,9 @@ Copy `.env.example` to `.env` and fill in every value. Reference:
 | `STORE_FROM_EMAIL` | Yes | Must be on a **verified** Resend domain — see §6. |
 | `ADMIN_NOTIFICATION_EMAIL` | Yes | Where new-order alerts go. |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | Yes | From Cloudinary dashboard → Settings → API Keys. Required for any admin product/category image upload. |
-| `CRON_SECRET` | Yes | Random string. Both cron routes fail closed if unset. |
-| `ORDER_PENDING_TIMEOUT_HOURS` | No | Defaults to `4`. |
+| `ORDER_PENDING_TIMEOUT_HOURS` | No | Defaults to `4`. How old a PENDING order with no successful payment must be before cleanup cancels it. |
+| `ORDER_CLEANUP_INTERVAL_MINUTES` | No | Defaults to `60`. Minimum time between opportunistic cleanup runs — see §8. |
+| `CRON_SECRET` | No | Only needed if you also wire up the optional external-scheduler route — see §8. The app does not depend on any scheduled job by default. |
 | `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` | Recommended | From your Sentry project. |
 | `SMS_ENABLED` / `SMS_PROVIDER` | No | Defaults to a mock provider; leave off until a real SMS adapter is implemented. |
 
@@ -120,26 +121,81 @@ org/project/auth-token vars for source-map upload. PII scrubbing is already
 configured (`sentry.client.config.ts` / `sentry.server.config.ts` redact
 customer name/phone/email/address before events leave the app).
 
-## 8. Cron Configuration
+## 8. Stale-Order Cleanup — Lazy, No Scheduler Required
 
-Two scheduled jobs, defined in `vercel.json`:
+**The app does not depend on a scheduled job to cancel stale unpaid orders.**
+This was a deliberate design change to work within Vercel's Hobby plan,
+which only allows one cron execution per day — far too infrequent for
+timely stock reservation cleanup.
 
-- `/api/cron/expire-pending-orders` — hourly. Cancels stale unpaid orders and
-  restores their reserved stock (idempotent — safe to run as often as you like).
-- `/api/cron/abandoned-carts` — every 6 hours. Sends cart-recovery emails.
+### How it works
 
-Both accept **either** `Authorization: Bearer <CRON_SECRET>` (what Vercel
-Cron sends automatically once `CRON_SECRET` is set as a project env var) or
-a custom `x-cron-secret: <CRON_SECRET>` header (for external schedulers like
-cron-job.org or a GitHub Actions workflow, which can set arbitrary headers).
-Both header styles were verified live against a running server.
+Instead of a cron job, cleanup runs opportunistically during normal traffic:
 
-If not deploying to Vercel, trigger these on your own scheduler with either
-header style, e.g.:
+- `lib/orders/cleanupExpiredOrders.ts` — the actual scan-and-cancel logic
+  (unchanged from the old cron implementation, just extracted into a
+  reusable function). Cancels PENDING orders with no successful payment
+  older than `ORDER_PENDING_TIMEOUT_HOURS`, restores their reserved stock via
+  the same `cancelOrder()` helper the admin UI uses, and returns metrics
+  (`scanned`, `cancelled`, `restoredStock`, `executionTime`).
+- `lib/orders/cleanupThrottle.ts` — `shouldRunCleanup()` atomically checks
+  and claims a throttle slot (stored in the `system_settings` table) so
+  cleanup runs at most once every `ORDER_CLEANUP_INTERVAL_MINUTES` (default
+  60), no matter how many requests come in. The check-and-claim is a single
+  compare-and-swap DB operation — safe under concurrent requests, verified
+  live with concurrent checkout calls.
+- `lib/orders/maybeRunExpiredOrderCleanup.ts` — the entry point every call
+  site actually calls. Awaits only the fast throttle check; if claimed, the
+  actual cleanup work runs without being awaited, so it never adds to the
+  response time of the request that triggered it. Never throws — every
+  failure is caught and logged, so cleanup can never break checkout, payment
+  initiation, or an admin page load.
+
+It's called from five places: order creation (`app/api/orders/route.ts`),
+M-Pesa STK push initiation (`app/api/payments/stk-push/route.ts`), and the
+admin dashboard/orders/products pages — i.e. anywhere real traffic already
+naturally flows regularly.
+
+### Performance impact
+
+The throttled (common) case costs one indexed primary-key lookup — in
+practice a few hundred milliseconds on this project's network path to a
+remote Supabase instance, the same order of magnitude as any other single DB
+query in this app (verified against a plain unrelated query for comparison).
+On a production deployment co-located in the same region as the database,
+this is a single-digit-to-low-double-digit-millisecond round trip. The
+actual cleanup scan, when it runs, is never awaited by the triggering
+request, so it adds effectively zero response-time overhead regardless.
+
+**Important**: set `DATABASE_POOL_SIZE` explicitly (see §2) — with the
+default of `1`, the background cleanup query can starve the foreground
+request's own database connection. This was caught live during testing.
+
+### Optional: external scheduler
+
+For teams that outgrow lazy cleanup (very high or very low traffic — lazy
+cleanup only runs when someone visits a wired page), `/api/cron/expire-pending-orders`
+still exists and calls the exact same `cleanupExpiredOrders()` function — no
+duplicated logic. It's authenticated and safe to wire up to any scheduler
+without changing anything else:
 
 ```bash
 curl -H "x-cron-secret: $CRON_SECRET" https://your-domain/api/cron/expire-pending-orders
 ```
+
+It accepts **either** `Authorization: Bearer <CRON_SECRET>` (what Vercel Pro
+Cron sends automatically once `CRON_SECRET` is set as a project env var) or
+a custom `x-cron-secret: <CRON_SECRET>` header (for cron-job.org, GitHub
+Actions, etc). Both header styles were verified live. Note it bypasses the
+lazy-path throttle — an explicit authenticated trigger is assumed to be
+intentional, so call it at whatever cadence you actually want.
+
+`vercel.json` no longer schedules this route. It still schedules
+`/api/cron/abandoned-carts` (cart-recovery emails) — a separate feature not
+in scope here. Note that route's `0 */6 * * *` schedule (4x/day) also
+exceeds Hobby's 1x/day cron limit; if you're deploying to Hobby, either
+downgrade its schedule to once daily or apply the same lazy-cleanup pattern
+to it as a follow-up.
 
 ## 9. Deployment Order
 

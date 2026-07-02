@@ -1,10 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { ProductManager } from "@/components/admin/ProductManager";
 import type { Product, Category } from "@/types";
+import { maybeRunExpiredOrderCleanup } from "@/lib/orders/maybeRunExpiredOrderCleanup";
 
 export const revalidate = 0; // Fresh DB reads
 
 export default async function AdminProductsPage() {
+  // Opportunistic lazy cleanup, before loading products — never blocks render.
+  try {
+    await maybeRunExpiredOrderCleanup();
+  } catch (error) {
+    console.error("[cleanup] Failed during admin products page load:", error);
+  }
+
   const [products, categories] = await Promise.all([
     prisma.product.findMany({
       include: { category: true },

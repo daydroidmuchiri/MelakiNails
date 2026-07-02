@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { initiateStkPush } from "@/lib/mpesa/stkPush";
 import { formatPhoneNumber } from "@/lib/mpesa/utils";
+import { maybeRunExpiredOrderCleanup } from "@/lib/orders/maybeRunExpiredOrderCleanup";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,6 +14,13 @@ export async function POST(request: NextRequest) {
         { error: "orderId and phoneNumber are required" },
         { status: 400 }
       );
+    }
+
+    // Opportunistic lazy cleanup — never blocks or fails this request.
+    try {
+      await maybeRunExpiredOrderCleanup();
+    } catch (error) {
+      console.error("[cleanup] Failed during payment initiation:", error);
     }
 
     const order = await prisma.order.findUnique({

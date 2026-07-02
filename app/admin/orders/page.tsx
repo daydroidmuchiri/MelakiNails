@@ -1,10 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { OrderDashboard } from "@/components/admin/OrderDashboard";
 import type { Order } from "@/types";
+import { maybeRunExpiredOrderCleanup } from "@/lib/orders/maybeRunExpiredOrderCleanup";
 
 export const revalidate = 0; // Fresh reads
 
 export default async function AdminOrdersPage() {
+  // Opportunistic lazy cleanup, before loading orders — never blocks render.
+  try {
+    await maybeRunExpiredOrderCleanup();
+  } catch (error) {
+    console.error("[cleanup] Failed during admin orders page load:", error);
+  }
+
   const orders = await prisma.order.findMany({
     orderBy: { createdAt: "desc" },
   });

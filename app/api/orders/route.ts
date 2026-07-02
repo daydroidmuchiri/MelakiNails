@@ -5,6 +5,7 @@ import { notifyOrderCreated } from "@/lib/email/senders";
 import { requireAdminApi } from "@/lib/adminAuth";
 import { validateCoupon } from "@/lib/coupons";
 import { FREE_SHIPPING_THRESHOLD, STANDARD_DELIVERY_FEE } from "@/lib/constants";
+import { maybeRunExpiredOrderCleanup } from "@/lib/orders/maybeRunExpiredOrderCleanup";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,6 +20,13 @@ export async function POST(request: NextRequest) {
         { error: "Missing required fields" },
         { status: 400 }
       );
+    }
+
+    // Opportunistic lazy cleanup — never blocks or fails this request.
+    try {
+      await maybeRunExpiredOrderCleanup();
+    } catch (error) {
+      console.error("[cleanup] Failed during checkout:", error);
     }
 
     // Validate stock availability before proceeding, and load authoritative prices.

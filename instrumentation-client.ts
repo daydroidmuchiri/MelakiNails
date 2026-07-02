@@ -13,6 +13,14 @@ if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
   });
 }
 
+// Required by the SDK for App Router navigation instrumentation once using
+// instrumentation-client.ts (the file convention this replaces,
+// sentry.client.config.ts, didn't need this export). Without it the SDK
+// warns on every build. This doesn't change existing behavior — tracing
+// was already enabled via tracesSampleRate above; this just wires it up to
+// App Router route transitions rather than only manual/XHR instrumentation.
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
+
 const PII_KEYS = /^(customerName|customerEmail|customerPhone|email|phone|address|password|passwordHash)$/i;
 
 function scrubPii(value: unknown, seen = new WeakSet<object>()): unknown {

@@ -45,6 +45,15 @@ const nextConfig = {
   },
 };
 
+// Source map upload only runs (and only needs to run) when SENTRY_AUTH_TOKEN
+// is present — without it the Sentry webpack plugin has no way to authenticate
+// with Sentry's API. Skipping upload entirely when unset avoids noisy
+// "no auth token" warnings on builds that don't have it configured (e.g. PR
+// preview builds without secrets), without breaking local dev or CI builds
+// that do have it set. See docs/DEPLOYMENT.md "Sentry Setup" for which env
+// vars are required for which level of functionality.
+const hasSentryAuthToken = Boolean(process.env.SENTRY_AUTH_TOKEN);
+
 export default withSentryConfig(
   nextConfig,
   {
@@ -52,10 +61,15 @@ export default withSentryConfig(
     project: process.env.SENTRY_PROJECT,
     authToken: process.env.SENTRY_AUTH_TOKEN,
     silent: !process.env.CI,
-    disableLogger: true,
     sourcemaps: {
+      disable: !hasSentryAuthToken,
       deleteSourcemapsAfterUpload: true,
     },
     widenClientFileUpload: true,
+    webpack: {
+      treeshake: {
+        removeDebugLogging: true,
+      },
+    },
   }
 );

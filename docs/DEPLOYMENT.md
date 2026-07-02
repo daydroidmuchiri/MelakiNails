@@ -43,7 +43,8 @@ Copy `.env.example` to `.env` and fill in every value. Reference:
 | `ORDER_CLEANUP_INTERVAL_MINUTES` | No | Defaults to `60`. Minimum time between opportunistic stale-order cleanup runs — see §8. |
 | `ABANDONED_CART_CHECK_INTERVAL_MINUTES` | No | Defaults to `60`. Minimum time between opportunistic abandoned-cart reminder runs — see §8. |
 | `CRON_SECRET` | No | Only needed if you also wire up either optional external-scheduler route — see §8. The app does not depend on any scheduled job by default. |
-| `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` | Recommended | From your Sentry project. |
+| `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | Recommended | From your Sentry project. Enables error/performance reporting on their own — this is the minimum for Sentry to work at all. |
+| `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` | Optional | Only needed for source map upload (readable stack traces instead of minified ones in the Sentry dashboard). Safe to omit — see §7. |
 | `SMS_ENABLED` / `SMS_PROVIDER` | No | Defaults to a mock provider; leave off until a real SMS adapter is implemented. |
 
 ## 3. Database Setup & Migrations
@@ -123,10 +124,29 @@ Check the `email_logs` table for `SENT` rows to confirm delivery.
 
 ## 7. Sentry Setup
 
-Create a Sentry project, set `SENTRY_DSN`/`NEXT_PUBLIC_SENTRY_DSN` and the
-org/project/auth-token vars for source-map upload. PII scrubbing is already
-configured (`sentry.client.config.ts` / `sentry.server.config.ts` redact
-customer name/phone/email/address before events leave the app).
+Create a Sentry project. Two tiers of functionality, both optional but
+independent — you don't need the second to get the first:
+
+1. **Error/performance reporting** — set `SENTRY_DSN` and
+   `NEXT_PUBLIC_SENTRY_DSN` (same value; the `NEXT_PUBLIC_` one is exposed to
+   the browser bundle, which is expected — a Sentry DSN is a write-only
+   ingestion identifier, not a secret). This alone is enough for errors to
+   show up in Sentry, both server-side (`sentry.server.config.ts`,
+   `sentry.edge.config.ts`) and client-side (`instrumentation-client.ts`).
+2. **Source map upload** — additionally set `SENTRY_ORG`, `SENTRY_PROJECT`,
+   and `SENTRY_AUTH_TOKEN` (generate the token at
+   https://sentry.io/settings/account/api/auth-tokens/ with the
+   `project:releases` scope). This makes stack traces in the Sentry
+   dashboard readable (real file/line instead of minified bundle
+   positions). If `SENTRY_AUTH_TOKEN` is left unset, source map upload is
+   automatically and cleanly disabled (`next.config.mjs` sets
+   `sourcemaps.disable` based on whether the token is present) — errors
+   still report normally, just with minified stack traces, and the build
+   does not warn about the missing token.
+
+PII scrubbing is already configured (`instrumentation-client.ts` /
+`sentry.server.config.ts` redact customer name/phone/email/address before
+events leave the app).
 
 ## 8. Background Jobs — Lazy, No Scheduler Required
 

@@ -2,7 +2,7 @@
 
 A pixel-accurate, production-ready Next.js 14 e-commerce storefront for MELAKI, a Kenyan nail supplies and salon furniture shop.
 
-## Tech Stack
+#### Tech Stacks
 
 - **Framework**: Next.js 14 (App Router)
 - **Language**: TypeScript (strict mode)
@@ -131,3 +131,5 @@ melaki-store/
 | Sale badge | `#E53E3E` (red) |
 | New badge | `#38A169` (green) |
 | Font | Inter + Playfair Display |
+
+test test
